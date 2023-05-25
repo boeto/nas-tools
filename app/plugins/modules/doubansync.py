@@ -1,5 +1,5 @@
 import random
-from datetime import datetime
+from datetime import datetime, timedelta
 from threading import Event, Lock
 from time import sleep
 
@@ -8,8 +8,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from jinja2 import Template
 
 from app.downloader import Downloader
-from app.helper import DbHelper
-from app.media import DouBan, Media
+from app.media import DouBan
 from app.media.meta import MetaInfo
 from app.plugins import EventHandler
 from app.plugins.modules._base import _IPluginModule
@@ -18,6 +17,7 @@ from app.subscribe import Subscribe
 from app.utils import ExceptionUtils
 from app.utils.types import SearchType, RssType, EventType, MediaType
 from config import Config
+from web.backend.web_utils import WebUtils
 
 lock = Lock()
 
@@ -50,12 +50,12 @@ class DoubanSync(_IPluginModule):
     douban = None
     searcher = None
     downloader = None
-    media = None
-    dbhelper = None
     subscribe = None
     _enable = False
     _onlyonce = False
-    _interval = False
+    _sync_type = False
+    _rss_interval = 0
+    _interval = 0
     _auto_search = False
     _auto_rss = False
     _users = []
@@ -68,17 +68,27 @@ class DoubanSync(_IPluginModule):
         self.douban = DouBan()
         self.searcher = Searcher()
         self.downloader = Downloader()
-        self.media = Media()
-        self.dbhelper = DbHelper()
         self.subscribe = Subscribe()
         if config:
             self._enable = config.get("enable")
             self._onlyonce = config.get("onlyonce")
-            self._interval = config.get("interval")
-            if self._interval and str(self._interval).isdigit():
-                self._interval = int(self._interval)
-            else:
+            self._sync_type = config.get("sync_type")
+            if self._sync_type == '1':
                 self._interval = 0
+                rss_interval = config.get("rss_interval")
+                if rss_interval and str(rss_interval).isdigit():
+                    self._rss_interval = int(rss_interval)
+                    if self._rss_interval < 300:
+                        self._rss_interval = 300
+                else:
+                    self._rss_interval = 0
+            else:
+                self._rss_interval = 0
+                interval = config.get("interval")
+                if interval and str(interval).isdigit():
+                    self._interval = int(interval)
+                else:
+                    self._interval = 0
             self._auto_search = config.get("auto_search")
             self._auto_rss = config.get("auto_rss")
             self._cookie = config.get("cookie")
@@ -103,20 +113,28 @@ class DoubanSync(_IPluginModule):
         if self.get_state() or self._onlyonce:
             self._scheduler = BackgroundScheduler(timezone=Config().get_timezone())
             if self._interval:
-                self.info(f"订阅服务启动，周期：{self._interval} 小时，类型：{self._types}，用户：{self._users}")
+                self.info(f"豆瓣全量同步服务启动，周期：{self._interval} 小时，类型：{self._types}，用户：{self._users}")
                 self._scheduler.add_job(self.sync, 'interval',
                                         hours=self._interval)
+            if self._rss_interval:
+                self.info(f"豆瓣近期动态同步服务启动，周期：{self._rss_interval} 秒，类型：{self._types}，用户：{self._users}")
+                self._scheduler.add_job(self.sync, 'interval',
+                                        seconds=self._rss_interval)
 
             if self._onlyonce:
-                self.info(f"同步服务启动，立即运行一次")
+                self.info("豆瓣同步服务启动，立即运行一次")
                 self._scheduler.add_job(self.sync, 'date',
-                                        run_date=datetime.now(tz=pytz.timezone(Config().get_timezone())))
+                                        run_date=datetime.now(tz=pytz.timezone(Config().get_timezone())) + timedelta(
+                                            seconds=3))
+
                 # 关闭一次性开关
                 self._onlyonce = False
                 self.update_config({
                     "onlyonce": self._onlyonce,
                     "enable": self._enable,
+                    "sync_type": self._sync_type,
                     "interval": self._interval,
+                    "rss_interval": self._rss_interval,
                     "auto_search": self._auto_search,
                     "auto_rss": self._auto_rss,
                     "cookie": self._cookie,
@@ -131,9 +149,10 @@ class DoubanSync(_IPluginModule):
 
     def get_state(self):
         return self._enable \
-            and self._interval \
-            and self._users \
-            and self._types
+               and self._users \
+               and self._types \
+            and ((self._sync_type == '1' and self._rss_interval)
+                 or (self._sync_type != '1' and self._interval))
 
     @staticmethod
     def get_fields():
@@ -147,7 +166,7 @@ class DoubanSync(_IPluginModule):
                         {
                             'title': '开启豆瓣同步',
                             'required': "",
-                            'tooltip': '开启后，定时同步豆瓣在看、想看、看过记录，有新内容时自动添加订阅或者搜索下载',
+                            'tooltip': '开启后，定时同步豆瓣在看、想看、看过记录，有新内容时自动添加订阅或者搜索下载，支持全量同步及近期动态两种模式，分别设置同步间隔',
                             'type': 'switch',
                             'id': 'enable',
                         }
@@ -175,7 +194,7 @@ class DoubanSync(_IPluginModule):
                             ]
                         },
                         {
-                            'title': '同步数据类型',
+                            'title': '同步内容',
                             'required': "required",
                             'tooltip': '同步哪些类型的收藏数据：do 在看，wish 想看，collect 看过，用英文逗号,分隔配置',
                             'type': 'text',
@@ -185,13 +204,30 @@ class DoubanSync(_IPluginModule):
                                     'placeholder': 'do,wish,collect',
                                 }
                             ]
+                        },
+                        {
+                            'title': '同步方式',
+                            'required': "required",
+                            'tooltip': '选择使用哪种方式同步豆瓣数据：全量同步（根据同步范围全量同步所有数据）、近期动态（同步用户近期的10条动态数据）',
+                            'type': 'select',
+                            'content': [
+                                {
+                                    'id': 'sync_type',
+                                    'options': {
+                                        '0': '全量同步',
+                                        '1': '近期动态'
+                                    },
+                                    'default': '0',
+                                    'onchange': 'DoubanSync_sync_rss_change(this)'
+                                }
+                            ]
                         }
                     ],
                     [
                         {
-                            'title': '同步范围（天）',
+                            'title': '全量同步范围（天）',
                             'required': "required",
-                            'tooltip': '同步多少天内的记录，0表示同步全部',
+                            'tooltip': '同步多少天内的记录，0表示同步全部，仅适用于全量同步',
                             'type': 'text',
                             'content': [
                                 {
@@ -201,14 +237,26 @@ class DoubanSync(_IPluginModule):
                             ]
                         },
                         {
-                            'title': '同步间隔（小时）',
+                            'title': '全量同步间隔（小时）',
                             'required': "required",
-                            'tooltip': '间隔多久同步一次豆瓣数据，为了避免被豆瓣封禁IP，应尽可能拉长间隔时间',
+                            'tooltip': '间隔多久同步一次时间范围内的用户标记的数据，为了避免被豆瓣封禁IP，应尽可能拉长间隔时间',
                             'type': 'text',
                             'content': [
                                 {
                                     'id': 'interval',
                                     'placeholder': '6',
+                                }
+                            ]
+                        },
+                        {
+                            'title': '近期动态同步间隔（秒）',
+                            'required': "required",
+                            'tooltip': '豆瓣近期动态的同步时间间隔，最小300秒，可设置较小的间隔同步用户近期动态数据，但无法同步全部标记数据',
+                            'type': 'text',
+                            'content': [
+                                {
+                                    'id': 'rss_interval',
+                                    'placeholder': '300',
                                 }
                             ]
                         }
@@ -252,7 +300,7 @@ class DoubanSync(_IPluginModule):
         插件的额外页面，返回页面标题和页面内容
         :return: 标题，页面内容，确定按钮响应函数
         """
-        results = self.dbhelper.get_douban_history()
+        results = self.get_history()
         template = """
           <div class="table-responsive table-modal-body">
             <table class="table table-vcenter card-table table-hover table-striped">
@@ -269,36 +317,36 @@ class DoubanSync(_IPluginModule):
               <tbody>
               {% if HistoryCount > 0 %}
                 {% for Item in DoubanHistory %}
-                  <tr id="douban_history_{{ Item.ID }}">
+                  <tr id="douban_history_{{ Item.id }}">
                     <td class="w-5">
-                      <img class="rounded w-5" src="{{ Item.IMAGE }}"
+                      <img class="rounded w-5" src="{{ Item.image }}"
                            onerror="this.src='../static/img/no-image.png'" alt=""
                            style="min-width: 50px"/>
                     </td>
                     <td>
-                      <div>{{ Item.NAME }} ({{ Item.YEAR }})</div>
-                      {% if Item.RATING %}
+                      <div>{{ Item.name }} ({{ Item.year }})</div>
+                      {% if Item.rating %}
                         <div class="text-muted text-nowrap">
-                        评份：{{ Item.RATING }}
+                        评份：{{ Item.rating }}
                         </div>
                       {% endif %}
                     </td>
                     <td>
-                      {{ Item.TYPE }}
+                      {{ Item.type }}
                     </td>
                     <td>
-                      {% if Item.STATE == 'DOWNLOADED' %}
+                      {% if Item.state == 'DOWNLOADED' %}
                         <span class="badge bg-green">已下载</span>
-                      {% elif Item.STATE == 'RSS' %}
+                      {% elif Item.state == 'RSS' %}
                         <span class="badge bg-blue">已订阅</span>
-                      {% elif Item.STATE == 'NEW' %}
+                      {% elif Item.state == 'NEW' %}
                         <span class="badge bg-blue">新增</span>
                       {% else %}
                         <span class="badge bg-orange">处理中</span>
                       {% endif %}
                     </td>
                     <td>
-                      <small>{{ Item.ADD_TIME or '' }}</small>
+                      <small>{{ Item.add_time or '' }}</small>
                     </td>
                     <td>
                       <div class="dropdown">
@@ -315,7 +363,7 @@ class DoubanSync(_IPluginModule):
                         </a>
                         <div class="dropdown-menu dropdown-menu-end">
                           <a class="dropdown-item text-danger"
-                             href='javascript:DoubanSync_delete_douban_history("{{ Item.ID }}")'>
+                             href='javascript:DoubanSync_delete_douban_history("{{ Item.id }}")'>
                             删除
                           </a>
                         </div>
@@ -343,12 +391,42 @@ class DoubanSync(_IPluginModule):
         return """
           // 删除豆瓣历史记录
           function DoubanSync_delete_douban_history(id){
-            ajax_post("delete_douban_history", {"id": id}, function (ret) {
+            ajax_post("run_plugin_method", {"plugin_id": 'DoubanSync', 'method': 'delete_sync_history', 'douban_id': id}, function (ret) {
               $("#douban_history_" + id).remove();
             });
-        
+          }
+          
+          // 同步方式切换
+          function DoubanSync_sync_rss_change(obj){
+            if ($(obj).val() == '1') {
+                $('#doubansync_rss_interval').parent().parent().show();
+                $('#doubansync_interval').parent().parent().hide();
+                $('#doubansync_days').parent().parent().hide();
+            }else{
+                $('#doubansync_rss_interval').parent().parent().hide();
+                $('#doubansync_interval').parent().parent().show();
+                $('#doubansync_days').parent().parent().show();
+            }
+          }
+          
+          // 初始化完成后执行的方法
+          function DoubanSync_PluginInit(){
+            DoubanSync_sync_rss_change('#doubansync_sync_type');
           }
         """
+
+    @staticmethod
+    def get_command():
+        """
+        定义远程控制命令
+        :return: 命令关键字、事件、描述、附带数据
+        """
+        return {
+            "cmd": "/db",
+            "event": EventType.DoubanSync,
+            "desc": "豆瓣同步",
+            "data": {}
+        }
 
     def stop_service(self):
         """
@@ -365,16 +443,21 @@ class DoubanSync(_IPluginModule):
         except Exception as e:
             print(str(e))
 
+    def delete_sync_history(self, douban_id):
+        """
+        删除同步历史
+        """
+        return self.delete_history(key=douban_id)
+
     @EventHandler.register(EventType.DoubanSync)
     def sync(self, event=None):
         """
         同步豆瓣数据
         """
-        if not self._interval:
+        if not self._interval and not self._rss_interval:
             self.info("豆瓣配置：同步间隔未配置或配置不正确")
             return
         with lock:
-            self.info("开始同步豆瓣数据...")
             # 拉取豆瓣数据
             medias = self.__get_all_douban_movies()
             # 开始搜索
@@ -382,18 +465,14 @@ class DoubanSync(_IPluginModule):
                 if not media or not media.get_name():
                     continue
                 try:
-                    # 查询数据库状态，已经加入RSS的不处理
-                    search_state = self.dbhelper.get_douban_search_state(media.get_name(), media.year)
-                    if not search_state or search_state[0] == "NEW":
+                    # 查询数据库状态
+                    history = self.get_history(media.douban_id)
+                    if not history or history.get("state") == "NEW":
                         if self._auto_search:
                             # 需要搜索
-                            if media.begin_season:
-                                subtitle = "第%s季" % media.begin_season
-                            else:
-                                subtitle = None
-                            media_info = self.media.get_media_info(title="%s %s" % (media.get_name(), media.year or ""),
-                                                                   subtitle=subtitle,
-                                                                   mtype=media.type)
+                            media_info = WebUtils.get_mediainfo_from_id(mtype=media.type,
+                                                                        mediaid=f"DB:{media.douban_id}",
+                                                                        wait=True)
                             # 不需要自动加订阅，则直接搜索
                             if not media_info or not media_info.tmdb_info:
                                 self.warn("%s 未查询到媒体信息" % media.get_name())
@@ -403,12 +482,10 @@ class DoubanSync(_IPluginModule):
                             # 已经存在
                             if exist_flag:
                                 # 更新为已下载状态
-                                self.info("%s 已存在" % media.get_name())
-                                self.dbhelper.insert_douban_media_state(media, "DOWNLOADED")
+                                self.info("%s 已存在" % media_info.title)
+                                self.__update_history(media=media_info, state="DOWNLOADED")
                                 continue
                             if not self._auto_rss:
-                                # 合并季
-                                media_info.begin_season = media.begin_season
                                 # 开始搜索
                                 search_result, no_exists, search_count, download_count = self.searcher.search_one_media(
                                     media_info=media_info,
@@ -417,26 +494,27 @@ class DoubanSync(_IPluginModule):
                                     user_name=media_info.user_name)
                                 if search_result:
                                     # 下载全了更新为已下载，没下载全的下次同步再次搜索
-                                    self.dbhelper.insert_douban_media_state(media, "DOWNLOADED")
+                                    self.__update_history(media=media_info, state="DOWNLOADED")
                             else:
                                 # 需要加订阅，则由订阅去搜索
                                 self.info(
-                                    "%s %s 更新到%s订阅中..." % (media.get_name(), media.year, media.type.value))
-                                code, msg, _ = self.subscribe.add_rss_subscribe(mtype=media.type,
-                                                                                name=media.get_name(),
-                                                                                year=media.year,
+                                    "%s %s 更新到%s订阅中..." % (media_info.title,
+                                                                 media_info.year,
+                                                                 media_info.type.value))
+                                code, msg, _ = self.subscribe.add_rss_subscribe(mtype=media_info.type,
+                                                                                name=media_info.title,
+                                                                                year=media_info.year,
                                                                                 channel=RssType.Auto,
-                                                                                season=media.begin_season,
-                                                                                mediaid=f"DB:{media.douban_id}",
+                                                                                mediaid=f"DB:{media_info.douban_id}",
                                                                                 in_from=SearchType.DB)
                                 if code != 0:
-                                    self.error("%s 添加订阅失败：%s" % (media.get_name(), msg))
+                                    self.error("%s 添加订阅失败：%s" % (media_info.title, msg))
                                     # 订阅已存在
                                     if code == 9:
-                                        self.dbhelper.insert_douban_media_state(media, "RSS")
+                                        self.__update_history(media=media_info, state="RSS")
                                 else:
                                     # 插入为已RSS状态
-                                    self.dbhelper.insert_douban_media_state(media, "RSS")
+                                    self.__update_history(media=media_info, state="RSS")
                         else:
                             # 不需要搜索
                             if self._auto_rss:
@@ -446,47 +524,61 @@ class DoubanSync(_IPluginModule):
                                 code, msg, _ = self.subscribe.add_rss_subscribe(mtype=media.type,
                                                                                 name=media.get_name(),
                                                                                 year=media.year,
-                                                                                channel=RssType.Auto,
-                                                                                season=media.begin_season,
                                                                                 mediaid=f"DB:{media.douban_id}",
+                                                                                channel=RssType.Auto,
                                                                                 state="R",
                                                                                 in_from=SearchType.DB)
                                 if code != 0:
                                     self.error("%s 添加订阅失败：%s" % (media.get_name(), msg))
                                     # 订阅已存在
                                     if code == 9:
-                                        self.dbhelper.insert_douban_media_state(media, "RSS")
+                                        self.__update_history(media=media, state="RSS")
                                 else:
                                     # 插入为已RSS状态
-                                    self.dbhelper.insert_douban_media_state(media, "RSS")
-                            elif not search_state:
+                                    self.__update_history(media=media, state="RSS")
+                            elif not history:
                                 self.info("%s %s 更新到%s列表中..." % (
                                     media.get_name(), media.year, media.type.value))
-                                self.dbhelper.insert_douban_media_state(media, "NEW")
+                                self.__update_history(media=media, state="NEW")
 
                     else:
-                        self.info("%s %s 已处理过" % (media.get_name(), media.year))
+                        self.info(f"{media.douban_id} {media.get_name()} {media.year} 已处理过")
                 except Exception as err:
-                    self.error("%s %s 处理失败：%s" % (media.get_name(), media.year, str(err)))
+                    self.error(f"{media.douban_id} {media.get_name()} {media.year} 处理失败：{str(err)}")
+                    ExceptionUtils.exception_traceback(err)
                     continue
             self.info("豆瓣数据同步完成")
+
+    def __update_history(self, media, state):
+        """
+        插入历史记录
+        """
+        value = {
+            "id": media.douban_id,
+            "name": media.title or media.get_name(),
+            "year": media.year,
+            "type": media.type.value,
+            "rating": media.vote_average,
+            "image": media.get_poster_image(),
+            "state": state,
+            "add_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        if self.get_history(key=media.douban_id):
+            self.update_history(key=media.douban_id, value=value)
+        else:
+            self.history(key=media.douban_id, value=value)
 
     def __get_all_douban_movies(self):
         """
         获取每一个用户的每一个类型的豆瓣标记
         :return: 搜索到的媒体信息列表（不含TMDB信息）
         """
-        if not self._interval \
-                or not self._users \
-                or not self._types:
-            self.error("豆瓣插件未配置或配置不正确")
-            return []
+        self.info(f"同步方式：{'近期动态' if self._sync_type else '全量同步'}")
+
         # 返回媒体列表
         media_list = []
         # 豆瓣ID列表
         douban_ids = {}
-        # 每页条数
-        perpage_number = 15
         # 每一个用户
         for user in self._users:
             if not user:
@@ -496,66 +588,101 @@ class DoubanSync(_IPluginModule):
             userinfo = self.douban.get_user_info(userid=user)
             if userinfo:
                 user_name = userinfo.get("name")
-            # 每一个类型成功数量
-            user_succnum = 0
-            for mtype in self._types:
-                if not mtype:
-                    continue
-                self.info(f"开始获取 {user_name or user} 的 {mtype} 数据...")
-                # 开始序号
-                start_number = 0
-                # 类型成功数量
-                user_type_succnum = 0
-                # 每一页
-                while True:
-                    # 页数
-                    page_number = int(start_number / perpage_number + 1)
-                    # 当前页成功数量
-                    sucess_urlnum = 0
-                    # 是否继续下一页
-                    continue_next_page = True
-                    self.debug(f"开始解析第 {page_number} 页数据...")
-                    try:
-                        items = self.douban.get_douban_wish(dtype=mtype, userid=user, start=start_number, wait=True)
-                        if not items:
-                            self.warn(f"第 {page_number} 页未获取到数据")
-                            break
-                        # 解析豆瓣ID
-                        for item in items:
-                            # 时间范围
-                            date = item.get("date")
-                            if not date:
-                                continue_next_page = False
+
+            if self._sync_type != "1":
+                # 每页条数
+                perpage_number = 15
+                # 所有类型成功数量
+                user_succnum = 0
+                for mtype in self._types:
+                    if not mtype:
+                        continue
+                    self.info(f"开始获取 {user_name or user} 的 {mtype} 数据...")
+                    # 开始序号
+                    start_number = 0
+                    # 类型成功数量
+                    user_type_succnum = 0
+                    # 每一页
+                    while True:
+                        # 页数
+                        page_number = int(start_number / perpage_number + 1)
+                        # 当前页成功数量
+                        sucess_urlnum = 0
+                        # 是否继续下一页
+                        continue_next_page = True
+                        self.debug(f"开始解析第 {page_number} 页数据...")
+                        try:
+                            items = self.douban.get_douban_wish(dtype=mtype, userid=user, start=start_number, wait=True)
+                            if not items:
+                                self.warn(f"第 {page_number} 页未获取到数据")
                                 break
-                            else:
-                                mark_date = datetime.strptime(date, '%Y-%m-%d')
-                                if self._days and not (datetime.now() - mark_date).days < int(self._days):
+                            # 解析豆瓣ID
+                            for item in items:
+                                # 时间范围
+                                date = item.get("date")
+                                if not date:
                                     continue_next_page = False
                                     break
-                            doubanid = item.get("id")
-                            if str(doubanid).isdigit():
-                                self.info("解析到媒体：%s" % doubanid)
-                                if doubanid not in douban_ids:
-                                    douban_ids[doubanid] = {
-                                        "user_name": user_name
-                                    }
-                                sucess_urlnum += 1
-                                user_type_succnum += 1
-                                user_succnum += 1
-                        self.debug(
-                            f"{user_name or user} 第 {page_number} 页解析完成，共获取到 {sucess_urlnum} 个媒体")
-                    except Exception as err:
-                        ExceptionUtils.exception_traceback(err)
-                        self.error(f"{user_name or user} 第 {page_number} 页解析出错：%s" % str(err))
-                        break
-                    # 继续下一页
-                    if continue_next_page:
-                        start_number += perpage_number
-                    else:
-                        break
-                # 当前类型解析结束
-                self.debug(f"用户 {user_name or user} 的 {mtype} 解析完成，共获取到 {user_type_succnum} 个媒体")
-            self.info(f"用户 {user_name or user} 解析完成，共获取到 {user_succnum} 个媒体")
+                                else:
+                                    mark_date = datetime.strptime(date, '%Y-%m-%d')
+                                    if self._days and not (datetime.now() - mark_date).days < int(self._days):
+                                        continue_next_page = False
+                                        break
+                                doubanid = item.get("id")
+                                if str(doubanid).isdigit():
+                                    self.info("解析到媒体：%s" % doubanid)
+                                    if doubanid not in douban_ids:
+                                        douban_ids[doubanid] = {
+                                            "user_name": user_name
+                                        }
+                                    sucess_urlnum += 1
+                                    user_type_succnum += 1
+                                    user_succnum += 1
+                            self.debug(
+                                f"{user_name or user} 第 {page_number} 页解析完成，共获取到 {sucess_urlnum} 个媒体")
+                        except Exception as err:
+                            ExceptionUtils.exception_traceback(err)
+                            self.error(f"{user_name or user} 第 {page_number} 页解析出错：%s" % str(err))
+                            break
+                        # 继续下一页
+                        if continue_next_page:
+                            start_number += perpage_number
+                        else:
+                            break
+                    # 当前类型解析结束
+                    self.debug(f"用户 {user_name or user} 的 {mtype} 解析完成，共获取到 {user_type_succnum} 个媒体")
+                self.info(f"用户 {user_name or user} 解析完成，共获取到 {user_succnum} 个媒体")
+            else:
+                all_items = self.douban.get_latest_douban_interests(dtype='all', userid=user, wait=True)
+                self.debug(f"开始解析 {user_name or user} 的数据...")
+                self.debug(f"共获取到 {len(all_items)} 条数据")
+                # 所有类型成功数量
+                user_succnum = 0
+                for mtype in self._types:
+                    # 类型成功数量
+                    user_type_succnum = 0
+                    items = list(filter(lambda x: x.get("type") == mtype, all_items))
+                    for item in items:
+                        # 时间范围
+                        date = item.get("date")
+                        if not date:
+                            continue
+                        else:
+                            mark_date = datetime.strptime(date, '%Y-%m-%d')
+                            if self._days and not (datetime.now() - mark_date).days < int(self._days):
+                                continue
+                        doubanid = item.get("id")
+                        if str(doubanid).isdigit():
+                            self.info("解析到媒体：%s" % doubanid)
+                            if doubanid not in douban_ids:
+                                douban_ids[doubanid] = {
+                                    "user_name": user_name
+                                }
+                            user_type_succnum += 1
+                            user_succnum += 1
+                    self.debug(f"用户 {user_name or user} 的 {mtype} 解析完成，共获取到 {user_type_succnum} 个媒体")
+                self.debug(f"用户 {user_name or user} 解析完成，共获取到 {user_succnum} 个媒体")
+
         self.info(f"所有用户解析完成，共获取到 {len(douban_ids)} 个媒体")
         # 查询豆瓣详情
         for doubanid, info in douban_ids.items():

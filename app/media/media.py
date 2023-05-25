@@ -16,7 +16,7 @@ from app.media.tmdbv3api import TMDb, Search, Movie, TV, Person, Find, TMDbExcep
 from app.utils import PathUtils, EpisodeFormat, RequestUtils, NumberUtils, StringUtils, cacheman
 from app.utils.types import MediaType, MatchMode
 from config import Config, KEYWORD_BLACKLIST, KEYWORD_SEARCH_WEIGHT_3, KEYWORD_SEARCH_WEIGHT_2, KEYWORD_SEARCH_WEIGHT_1, \
-    KEYWORD_STR_SIMILARITY_THRESHOLD, KEYWORD_DIFF_SCORE_THRESHOLD, TMDB_PEOPLE_PROFILE_URL
+    KEYWORD_STR_SIMILARITY_THRESHOLD, KEYWORD_DIFF_SCORE_THRESHOLD
 
 
 class Media:
@@ -509,7 +509,10 @@ class Media:
             try:
                 tmdb_links = []
                 html = etree.HTML(html_text)
-                links = html.xpath("//a[@data-id]/@href")
+                if mtype == MediaType.TV:
+                    links = html.xpath("//a[@data-id and @data-media-type='tv']/@href")
+                else:
+                    links = html.xpath("//a[@data-id]/@href")
                 for link in links:
                     if not link or (not link.startswith("/tv") and not link.startswith("/movie")):
                         continue
@@ -1031,7 +1034,7 @@ class Media:
         return ret_infos
 
     @staticmethod
-    def __dict_tmdbinfos(infos, mtype=None):
+    def __dict_tmdbinfos(infos, mtype=None, poster_filter=False):
         """
         TMDB电影信息转为字典
         """
@@ -1042,6 +1045,8 @@ class Media:
             tmdbid = info.get("id")
             vote = round(float(info.get("vote_average")), 1) if info.get("vote_average") else 0,
             image = Config().get_tmdbimage_url(info.get("poster_path"))
+            if poster_filter and not image:
+                continue
             overview = info.get("overview")
             if mtype:
                 media_type = mtype.value
@@ -1707,7 +1712,7 @@ class Media:
             "credit_id": crew.get("credit_id"),
             "department": crew.get("department"),
             "job": crew.get("job"),
-            "profile": TMDB_PEOPLE_PROFILE_URL % crew.get('id')
+            "profile": 'https://www.themoviedb.org/person/%s' % crew.get('id')
         } for crew in crews or []]
 
     @staticmethod
@@ -1727,7 +1732,7 @@ class Media:
             "role": cast.get("character"),
             "credit_id": cast.get("credit_id"),
             "order": cast.get("order"),
-            "profile": TMDB_PEOPLE_PROFILE_URL % cast.get('id')
+            "profile": 'https://www.themoviedb.org/person/%s' % cast.get('id')
         } for cast in casts or []]
 
     def get_tmdb_directors_actors(self, tmdbinfo):
@@ -2003,10 +2008,10 @@ class Media:
         try:
             if mtype == MediaType.MOVIE:
                 movies = self.discover.discover_movies(params=params, page=page)
-                return self.__dict_tmdbinfos(movies, mtype)
+                return self.__dict_tmdbinfos(infos=movies, mtype=mtype, poster_filter=True)
             elif mtype == MediaType.TV:
                 tvs = self.discover.discover_tv_shows(params=params, page=page)
-                return self.__dict_tmdbinfos(tvs, mtype)
+                return self.__dict_tmdbinfos(infos=tvs, mtype=mtype, poster_filter=True)
         except Exception as e:
             print(str(e))
         return []

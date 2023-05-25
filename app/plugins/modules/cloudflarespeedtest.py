@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from threading import Event
 
@@ -49,12 +49,13 @@ class CloudflareSpeedTest(_IPluginModule):
     _additional_args = None
     _re_install = False
     _notify = False
-    _cf_path = 'cloudflarespeedtest'
-    _cf_ipv4 = 'cloudflarespeedtest/ip.txt'
-    _cf_ipv6 = 'cloudflarespeedtest/ipv6.txt'
+    _check = False
+    _cf_path = None
+    _cf_ipv4 = None
+    _cf_ipv6 = None
+    _result_file = None
     _release_prefix = 'https://github.com/XIU2/CloudflareSpeedTest/releases/download'
     _binary_name = 'CloudflareST'
-    _result_file = 'cloudflarespeedtest/result_hosts.txt'
 
     # 退出事件
     _event = Event()
@@ -92,6 +93,18 @@ class CloudflareSpeedTest(_IPluginModule):
                                 }
                             ]
                         },
+                        {
+                            'title': 'CloudflareSpeedTest版本',
+                            'required': "",
+                            'tooltip': '如当前版本与CloudflareSpeedTest最新版本不一致，可开启重装后运行获取新版本',
+                            'type': 'text',
+                            'content': [
+                                {
+                                    'id': 'version',
+                                    'placeholder': '暂未安装',
+                                }
+                            ]
+                        }
                     ],
                     [
                         {
@@ -109,18 +122,12 @@ class CloudflareSpeedTest(_IPluginModule):
                             'id': 'ipv6',
                         },
                         {
-                            'title': '',
+                            'title': '自动校准',
                             'required': "",
-                            'tooltip': '',
-                            'type': 'text',
-                            'hidden': True,
-                            'content': [
-                                {
-                                    'id': 'version',
-                                    'placeholder': 'CloudflareSpeedTest版本',
-                                }
-                            ]
-                        }
+                            'tooltip': '开启后，会自动查询自定义hosts插件中出现次数最多的ip替换到优选IP。（如果出现次数最多的ip不止一个，则不做兼容处理）',
+                            'type': 'switch',
+                            'id': 'check',
+                        },
                     ],
                     [
                         {
@@ -168,6 +175,17 @@ class CloudflareSpeedTest(_IPluginModule):
             }
         ]
 
+    @staticmethod
+    def get_script():
+        """
+        返回插件额外的JS代码
+        """
+        return """
+        $(document).ready(function () {
+          $('#cloudflarespeedtest_version').prop('disabled', true);
+        });
+         """
+
     def init_config(self, config=None):
         self.eventmanager = EventManager()
 
@@ -182,6 +200,7 @@ class CloudflareSpeedTest(_IPluginModule):
             self._re_install = config.get("re_install")
             self._additional_args = config.get("additional_args")
             self._notify = config.get("notify")
+            self._check = config.get("check")
 
         # 停止现有任务
         self.stop_service()
@@ -196,7 +215,8 @@ class CloudflareSpeedTest(_IPluginModule):
             if self._onlyonce:
                 self.info(f"Cloudflare CDN优选服务启动，立即运行一次")
                 self._scheduler.add_job(self.__cloudflareSpeedTest, 'date',
-                                        run_date=datetime.now(tz=pytz.timezone(Config().get_timezone())))
+                                        run_date=datetime.now(tz=pytz.timezone(Config().get_timezone())) + timedelta(
+                                            seconds=3))
                 # 关闭一次性开关
                 self._onlyonce = False
                 self.__update_config()
@@ -210,6 +230,11 @@ class CloudflareSpeedTest(_IPluginModule):
         """
         CloudflareSpeedTest优选
         """
+        self._cf_path = self.get_data_path()
+        self._ipv4 = os.path.join(self._cf_path, "ip.txt")
+        self._ipv6 = os.path.join(self._cf_path, "ipv6.txt")
+        self._result_file = os.path.join(self._cf_path, "result_hosts.txt")
+
         # 获取自定义Hosts插件，若无设置则停止
         customHosts = self.get_config("CustomHosts")
         self._customhosts = customHosts and customHosts.get("enable")
@@ -233,11 +258,19 @@ class CloudflareSpeedTest(_IPluginModule):
             self._version = release_version
             self.__update_config()
 
+        hosts = customHosts.get("hosts")
+        if isinstance(hosts, str):
+            hosts = str(hosts).split('\n')
+
+        # 校正优选ip
+        if self._check:
+            self.__check_cf_if(hosts=hosts)
+
         # 开始优选
         if err_flag:
             self.info("正在进行CLoudflare CDN优选，请耐心等待")
             # 执行优选命令，-dd不测速
-            cf_command = f'./{self._cf_path}/{self._binary_name} {self._additional_args} -o {self._result_file}' + (
+            cf_command = f'cd {self._cf_path} && ./{self._binary_name} {self._additional_args} -o {self._result_file}' + (
                 f' -f {self._cf_ipv4}' if self._ipv4 else '') + (f' -f {self._cf_ipv6}' if self._ipv6 else '')
             self.info(f'正在执行优选命令 {cf_command}')
             os.system(cf_command)
@@ -252,9 +285,6 @@ class CloudflareSpeedTest(_IPluginModule):
                     self.info(f"CloudflareSpeedTest CDN优选ip未变，不做处理")
                 else:
                     # 替换优选ip
-                    hosts = customHosts.get("hosts")
-                    if isinstance(hosts, str):
-                        hosts = str(hosts).split('\n')
                     err_hosts = customHosts.get("err_hosts")
                     enable = customHosts.get("enable")
 
@@ -299,6 +329,38 @@ class CloudflareSpeedTest(_IPluginModule):
             self.__update_config()
             self.stop_service()
 
+    def __check_cf_if(self, hosts):
+        """
+        校正cf优选ip
+        防止特殊情况下cf优选ip和自定义hosts插件中ip不一致
+        """
+        # 统计每个IP地址出现的次数
+        ip_count = {}
+        for host in hosts:
+            ip = host.split()[0]
+            if ip in ip_count:
+                ip_count[ip] += 1
+            else:
+                ip_count[ip] = 1
+
+        # 找出出现次数最多的IP地址
+        max_ips = []  # 保存最多出现的IP地址
+        max_count = 0
+        for ip, count in ip_count.items():
+            if count > max_count:
+                max_ips = [ip]  # 更新最多的IP地址
+                max_count = count
+            elif count == max_count:
+                max_ips.append(ip)
+
+        # 如果出现次数最多的ip不止一个，则不做兼容处理
+        if len(max_ips) != 1:
+            return
+
+        if max_ips[0] != self._cf_ip:
+            self._cf_ip = max_ips[0]
+            self.info(f"获取到自定义hosts插件中ip {max_ips[0]} 出现次数最多，已自动校正优选ip")
+
     def __check_envirment(self):
         """
         环境检查
@@ -339,7 +401,8 @@ class CloudflareSpeedTest(_IPluginModule):
             install_flag = True
 
         # 重装后数据库有版本数据，但是本地没有则重装
-        if not install_flag and release_version == self._version and not Path(f'{self._cf_path}/{self._binary_name}').exists():
+        if not install_flag and release_version == self._version and not Path(
+                f'{self._cf_path}/{self._binary_name}').exists():
             self.warn(f"未检测到CloudflareSpeedTest本地版本，重新安装")
             install_flag = True
 
@@ -373,13 +436,16 @@ class CloudflareSpeedTest(_IPluginModule):
         """
         macos docker安装cloudflare
         """
-        # 首次下载或下载新版压缩包
-        proxies = Config().get_proxies()
-        https_proxy = proxies.get("https") if proxies and proxies.get("https") else None
-        if https_proxy:
-            os.system(f'wget -P {self._cf_path} --no-check-certificate -e use_proxy=yes -e https_proxy={https_proxy} {download_url}')
-        else:
-            os.system(f'wget -P {self._cf_path} https://ghproxy.com/{download_url}')
+        # 手动下载安装包后，无需在此下载
+        if not Path(f'{self._cf_path}/{cf_file_name}').exists():
+            # 首次下载或下载新版压缩包
+            proxies = Config().get_proxies()
+            https_proxy = proxies.get("https") if proxies and proxies.get("https") else None
+            if https_proxy:
+                os.system(
+                    f'wget -P {self._cf_path} --no-check-certificate -e use_proxy=yes -e https_proxy={https_proxy} {download_url}')
+            else:
+                os.system(f'wget -P {self._cf_path} https://ghproxy.com/{download_url}')
 
         # 判断是否下载好安装包
         if Path(f'{self._cf_path}/{cf_file_name}').exists():
@@ -429,7 +495,8 @@ class CloudflareSpeedTest(_IPluginModule):
             "ipv6": self._ipv6,
             "re_install": self._re_install,
             "additional_args": self._additional_args,
-            "notify": self._notify
+            "notify": self._notify,
+            "check": self._check
         })
 
     @staticmethod

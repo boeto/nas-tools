@@ -10,10 +10,9 @@ from apscheduler.triggers.cron import CronTrigger
 import log
 from app.downloader import Downloader
 from app.filter import Filter
-from app.helper import DbHelper
+from app.helper import DbHelper, RssHelper
 from app.media.meta import MetaInfo
 from app.message import Message
-from app.rss import Rss
 from app.sites import Sites, SiteConf
 from app.utils import StringUtils, ExceptionUtils
 from app.utils.commons import singleton
@@ -28,6 +27,7 @@ class BrushTask(object):
     siteconf = None
     filter = None
     dbhelper = None
+    rsshelper = None
     downloader = None
     _scheduler = None
     _brush_tasks = {}
@@ -40,6 +40,7 @@ class BrushTask(object):
 
     def init_config(self):
         self.dbhelper = DbHelper()
+        self.rsshelper = RssHelper()
         self.message = Message()
         self.sites = Sites()
         self.siteconf = SiteConf()
@@ -49,6 +50,8 @@ class BrushTask(object):
         self.stop_service()
         # 读取刷流任务列表
         self.load_brushtasks()
+        # 清理缓存
+        self._torrents_cache = []
         # 启动RSS任务
         if self._brush_tasks:
             self._scheduler = BackgroundScheduler(timezone=Config().get_timezone())
@@ -198,7 +201,11 @@ class BrushTask(object):
                                            dlcount=rss_rule.get("dlcount")):
             return
 
-        rss_result = Rss.parse_rssxml(url=rss_url, proxy=site_proxy)
+        rss_result = self.rsshelper.parse_rssxml(url=rss_url, proxy=site_proxy)
+        if rss_result is None:
+            # RSS链接过期
+            log.error(f"【Brush】{task_name} RSS链接已过期，请重新获取！")
+            return
         if len(rss_result) == 0:
             log.warn("【Brush】%s RSS未下载到数据" % site_name)
             return
@@ -247,6 +254,10 @@ class BrushTask(object):
                 if not self.__is_allow_new_torrent(taskinfo=taskinfo,
                                                    dlcount=max_dlcount,
                                                    torrent_size=size):
+                    continue
+                # 检查是否已处理过
+                if self.is_torrent_handled(enclosure=enclosure):
+                    log.info("【Brush】%s 已在刷流任务中" % torrent_name)
                     continue
                 # 开始下载
                 log.debug("【Brush】%s 符合条件，开始下载..." % torrent_name)
@@ -314,7 +325,7 @@ class BrushTask(object):
                 sendmessage = taskinfo.get("sendmessage")
 
                 # 当前任务种子详情
-                task_torrents = self.dbhelper.get_brushtask_torrents(taskid)
+                task_torrents = self.get_brushtask_torrents(taskid)
                 torrent_ids = [item.DOWNLOAD_ID for item in task_torrents if item.DOWNLOAD_ID]
                 # 避免种子被全删，没有种子ID的不处理
                 if not torrent_ids:
@@ -766,7 +777,7 @@ class BrushTask(object):
                     max_pubdate = min_max_pubdates[1] if len(min_max_pubdates) > 1 else None
                     localtz = pytz.timezone(Config().get_timezone())
                     localnowtime = datetime.now().astimezone(localtz)
-                    localpubdate = StringUtils.get_time_stamp(pubdate).astimezone(localtz)
+                    localpubdate = pubdate.astimezone(localtz)
                     pudate_hour = int(localnowtime.timestamp() - localpubdate.timestamp()) / 3600
                     log.debug('【Brush】发布时间：%s，当前时间：%s，时间间隔：%f hour' % (
                         localpubdate.isoformat(), localnowtime.isoformat(), pudate_hour))
@@ -943,3 +954,39 @@ class BrushTask(object):
                 self._scheduler = None
         except Exception as e:
             print(str(e))
+
+    def update_brushtask(self, brushtask_id, item):
+        """
+        新增刷种任务
+        """
+        ret = self.dbhelper.update_brushtask(brushtask_id, item)
+        self.init_config()
+        return ret
+
+    def delete_brushtask(self, brushtask_id):
+        """
+        删除刷种任务
+        """
+        ret = self.dbhelper.delete_brushtask(brushtask_id)
+        self.init_config()
+        return ret
+
+    def update_brushtask_state(self, state, brushtask_id=None):
+        """
+        更新刷种任务状态
+        """
+        ret = self.dbhelper.update_brushtask_state(tid=brushtask_id, state=state)
+        self.init_config()
+        return ret
+
+    def get_brushtask_torrents(self, brush_id, active=True):
+        """
+        获取刷种任务的种子列表
+        """
+        return self.dbhelper.get_brushtask_torrents(brush_id, active)
+
+    def is_torrent_handled(self, enclosure):
+        """
+        判断种子是否已经处理过
+        """
+        return self.dbhelper.get_brushtask_torrent_by_enclosure(enclosure)

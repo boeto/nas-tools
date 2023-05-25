@@ -133,25 +133,6 @@ class CUSTOMWORDGROUPS(Base):
     NOTE = Column(Text)
 
 
-class DOUBANMEDIAS(Base):
-    __tablename__ = 'DOUBAN_MEDIAS'
-    __table_args__ = (
-        Index('INDX_DOUBAN_MEDIAS_NAME', 'NAME', 'YEAR'),
-    )
-
-    ID = Column(Integer, Sequence('ID'), primary_key=True)
-    NAME = Column(Text)
-    YEAR = Column(Text)
-    TYPE = Column(Text)
-    RATING = Column(Text)
-    IMAGE = Column(Text)
-    STATE = Column(Text)
-    ADD_TIME = Column(Text)
-
-    def as_dict(self):
-        return {c.name: getattr(self, c.name) for c in self.__table__.columns}
-
-
 class DOWNLOADER(Base):
     __tablename__ = 'DOWNLOADER'
 
@@ -410,7 +391,7 @@ class SITEBRUSHTORRENTS(Base):
     TASK_ID = Column(Text, index=True)
     TORRENT_NAME = Column(Text)
     TORRENT_SIZE = Column(Text)
-    ENCLOSURE = Column(Text)
+    ENCLOSURE = Column(Text, index=True)
     DOWNLOADER = Column(Text)
     DOWNLOAD_ID = Column(Text)
     LST_MOD_DATE = Column(Text)
@@ -528,7 +509,7 @@ class TRANSFERHISTORY(Base):
     DEST = Column(Text)
     DEST_PATH = Column(Text)
     DEST_FILENAME = Column(Text)
-    DATE = Column(Text)
+    DATE = Column(Text, index=True)
 
     def as_dict(self):
         return {c.name: getattr(self, c.name) for c in self.__table__.columns}

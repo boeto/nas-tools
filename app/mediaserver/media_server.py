@@ -366,7 +366,7 @@ class MediaServer:
                 image_url = self.get_episode_image_by_id(item_id=event_info.get('item_id'),
                                                          season_id=event_info.get('season_id'),
                                                          episode_id=event_info.get('episode_id'))
-            elif event_info.get("item_type") == "MOV":
+            elif event_info.get("item_type") in ["MOV", "SHOW"]:
                 # 根据返回的item_id去调用媒体服务器获取
                 image_url = self.get_remote_image_by_id(item_id=event_info.get('item_id'),
                                                         image_type="Backdrop")
@@ -377,3 +377,19 @@ class MediaServer:
             self.message.send_mediaserver_message(event_info=event_info,
                                                   channel=channel.value,
                                                   image_url=image_url)
+
+    def get_resume(self, num=12):
+        """
+        获取继续观看
+        """
+        if not self.server:
+            return []
+        return self.server.get_resume(num=num)
+
+    def get_latest(self, num=20):
+        """
+        获取最近添加
+        """
+        if not self.server:
+            return []
+        return self.server.get_latest(num=num)

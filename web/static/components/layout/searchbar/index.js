@@ -81,28 +81,6 @@ export class LayoutSearchbar extends CustomElement {
 
   render() {
     return html`
-      <style>
-
-        .lit-searchbar {
-          background-color: rgba(0,0,0,0)!important;
-          border-right: none!important;
-          box-shadow: none!important;
-        }
-
-        .lit-searchbar-blur {
-          backdrop-filter: blur(8px);
-          -webkit-backdrop-filter:blur(8px);
-        }
-
-        .theme-dark .lit-searchbar-blur {
-          background-color: rgba(29,39,59,0.6)!important;
-        }
-
-        .theme-light .lit-searchbar-blur {
-          background-color: rgba(231,235,239,0.7)!important;
-        }
-
-      </style>
       <div class="container-fluid nav-search-bar">
         <div class="d-flex flex-row flex-grow-1 align-items-center py-1">
           <!-- 导航展开按钮 -->
@@ -185,6 +163,8 @@ export class LayoutSearchbar extends CustomElement {
                 <a href="javascript:logout()" class="dropdown-item">
                   注销 <span class="text-muted mx-3">${this.layout_username}</span>
                 </a>
+                <div class="dropdown-divider"></div>
+                <a href="https://wiki.nastool.cn" target="_blank" class="dropdown-item">帮助中心</a>
               </div>
             </div>
           </div>

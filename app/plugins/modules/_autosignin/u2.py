@@ -1,9 +1,10 @@
 import random
 import re
+import datetime
 
 from lxml import etree
 
-from app.sites.sitesignin._base import _ISiteSigninHandler
+from app.plugins.modules._autosignin._base import _ISiteSigninHandler
 from app.utils import StringUtils, RequestUtils
 from config import Config
 
@@ -45,6 +46,12 @@ class U2(_ISiteSigninHandler):
         ua = site_info.get("ua")
         proxy = Config().get_proxies() if site_info.get("proxy") else None
 
+        now = datetime.datetime.now()
+        # 判断当前时间是否小于9点
+        if now.hour < 9:
+            self.error(f"签到失败，9点前不签到")
+            return False, f'【{site}】签到失败，9点前不签到'
+        
         # 获取页面html
         html_res = RequestUtils(cookies=site_cookie,
                                 headers=ua,
@@ -53,6 +60,11 @@ class U2(_ISiteSigninHandler):
         if not html_res or html_res.status_code != 200:
             self.error(f"签到失败，请检查站点连通性")
             return False, f'【{site}】签到失败，请检查站点连通性'
+
+        if "login.php" in html_res.text:
+            self.error(f"签到失败，cookie失效")
+            return False, f'【{site}】签到失败，cookie失效'
+        
         # 判断是否已签到
         html_res.encoding = "utf-8"
         sign_status = self.sign_in_result(html_res=html_res.text,
