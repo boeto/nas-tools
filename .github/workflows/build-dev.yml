@@ -75,7 +75,7 @@ jobs:
           push: true
           tags: |
             ${{ env.DOCKER_USERNAME }}/nas-tools:latest-dev
-            ${{ env.DOCKER_USERNAME }}/nas-tools:beta-${{ env.app_version }}
+            ${{ env.DOCKER_USERNAME }}/nas-tools:dev-${{ env.release_version.app_version }}
 
       - name: Clean Up
         run: |
