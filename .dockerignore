@@ -18,3 +18,4 @@ tests
 .vscode
 .github
 nohup.out
+config-docker-*

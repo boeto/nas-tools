@@ -29,9 +29,7 @@ jobs:
         id: release_version
         run: |
           app_version=$(cat version.py | sed -e 's/[^0-9\.]//g')
-          echo "app_version=$app_version" >> appenv
-        env:
-          GITHUB_ENV: appenv
+          echo "app_version=$app_version" >> $GITHUB_ENV
 
       - name: Cache QEMU and Buildx
         id: cache-tools
@@ -77,7 +75,7 @@ jobs:
           push: true
           tags: |
             ${{ env.DOCKER_USERNAME }}/nas-tools:lates
-            ${{ env.DOCKER_USERNAME }}/nas-tools:${{ env.appenv.app_version }}
+            ${{ env.DOCKER_USERNAME }}/nas-tools:${{ env.app_version }}
 
       - name: Clean Up
         run: |
