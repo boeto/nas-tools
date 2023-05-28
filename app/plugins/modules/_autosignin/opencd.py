@@ -4,7 +4,7 @@ import time
 from lxml import etree
 
 from app.helper import OcrHelper
-from app.sites.sitesignin._base import _ISiteSigninHandler
+from app.plugins.modules._autosignin._base import _ISiteSigninHandler
 from app.utils import StringUtils, RequestUtils
 from config import Config
 
@@ -47,6 +47,10 @@ class Opencd(_ISiteSigninHandler):
         if not index_res or index_res.status_code != 200:
             self.error(f"签到失败，请检查站点连通性")
             return False, f'【{site}】签到失败，请检查站点连通性'
+
+        if "login.php" in index_res.text:
+            self.error(f"签到失败，cookie失效")
+            return False, f'【{site}】签到失败，cookie失效'
 
         if self._repeat_text in index_res.text:
             self.info(f"今日已签到")
@@ -118,4 +122,4 @@ class Opencd(_ISiteSigninHandler):
                     return False, f'【{site}】签到失败'
 
         self.error(f'签到失败：未获取到验证码')
-        return False, f'{site}签到失败：未获取到验证码'
+        return False, f'【{site}】签到失败：未获取到验证码'

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from threading import Event
 
 import pytz
@@ -30,7 +30,7 @@ class LibraryScraper(_IPluginModule):
     # 插件配置项ID前缀
     module_config_prefix = "libraryscraper_"
     # 加载顺序
-    module_order = 10
+    module_order = 7
     # 可使用的用户级别
     user_level = 1
 
@@ -164,7 +164,8 @@ class LibraryScraper(_IPluginModule):
             if self._onlyonce:
                 self.info(f"刮削服务启动，立即运行一次")
                 self._scheduler.add_job(self.__libraryscraper, 'date',
-                                        run_date=datetime.now(tz=pytz.timezone(Config().get_timezone())))
+                                        run_date=datetime.now(tz=pytz.timezone(Config().get_timezone())) + timedelta(
+                                            seconds=3))
                 # 关闭一次性开关
                 self._onlyonce = False
                 self.update_config({

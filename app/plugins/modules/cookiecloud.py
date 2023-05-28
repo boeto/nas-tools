@@ -1,12 +1,12 @@
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from threading import Event
 
 import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from app.helper import DbHelper, IndexerHelper
+from app.helper import IndexerHelper
 from app.plugins.modules._base import _IPluginModule
 from app.sites import Sites
 from app.utils import RequestUtils
@@ -36,9 +36,8 @@ class CookieCloud(_IPluginModule):
     auth_level = 2
 
     # 私有属性
+    sites = None
     _scheduler = None
-    _site = None
-    _dbhelper = None
     _index_helper = None
     # 设置开关
     _req = None
@@ -73,7 +72,7 @@ class CookieCloud(_IPluginModule):
                             'content': [
                                 {
                                     'id': 'server',
-                                    'placeholder': 'http://nastool.cn:8088'
+                                    'placeholder': 'https://nastool.cn/cookiecloud'
                                 }
                             ]
 
@@ -150,8 +149,7 @@ class CookieCloud(_IPluginModule):
         ]
 
     def init_config(self, config=None):
-        self._dbhelper = DbHelper()
-        self._site = Sites()
+        self.sites = Sites()
         self._index_helper = IndexerHelper()
 
         # 读取配置
@@ -188,7 +186,8 @@ class CookieCloud(_IPluginModule):
             if self._onlyonce:
                 self.info(f"同步服务启动，立即运行一次")
                 self._scheduler.add_job(self.__cookie_sync, 'date',
-                                        run_date=datetime.now(tz=pytz.timezone(Config().get_timezone())))
+                                        run_date=datetime.now(tz=pytz.timezone(Config().get_timezone())) + timedelta(
+                                            seconds=3))
                 # 关闭一次性开关
                 self._onlyonce = False
                 self.update_config({
@@ -283,29 +282,30 @@ class CookieCloud(_IPluginModule):
                  if content.get("name") and content.get("name") not in self._ignore_cookies]
             )
             # 查询站点
-            site_info = self._site.get_sites_by_suffix(domain_url)
+            site_info = self.sites.get_sites_by_suffix(domain_url)
             if site_info:
-                # 已存在的站点更新Cookie
-                self._dbhelper.update_site_cookie_ua(tid=site_info.get("id"), cookie=cookie_str)
-                update_count += 1
+                # 检查站点连通性
+                success, _, _ = self.sites.test_connection(site_id=site_info.get("id"))
+                if not success:
+                    # 已存在且连通失败的站点更新Cookie
+                    self.sites.update_site_cookie(siteid=site_info.get("id"), cookie=cookie_str)
+                    update_count += 1
             else:
                 # 查询是否在索引器范围
                 indexer_info = self._index_helper.get_indexer_info(domain_url)
                 if indexer_info:
                     # 支持则新增站点
-                    site_pri = self._site.get_max_site_pri() + 1
-                    self._dbhelper.insert_config_site(
+                    site_pri = self.sites.get_max_site_pri() + 1
+                    self.sites.add_site(
                         name=indexer_info.get("name"),
                         site_pri=site_pri,
                         signurl=indexer_info.get("domain"),
                         cookie=cookie_str,
-                        rss_uses='QT'
+                        rss_uses='T'
                     )
                     add_count += 1
         # 发送消息
         if update_count or add_count:
-            # 重载站点信息
-            self._site.init_config()
             msg = f"更新了 {update_count} 个站点的Cookie数据，新增了 {add_count} 个站点"
         else:
             msg = f"同步完成，但未更新任何站点数据！"

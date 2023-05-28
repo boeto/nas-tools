@@ -388,13 +388,17 @@ class SiteUserInfo(object):
         statistics = self.get_site_user_statistics(sites=sites, encoding="DICT")
         if not statistics:
             return ""
-        try:
-            max_date = min([datetime.strptime(d.get("join_at"), '%Y-%m-%d %H:%M:%S')
-                            for d in statistics if d.get("join_at") and d.get("join_at") != 'None'])
-            return max_date.strftime("%Y-%m-%d")
-        except Exception as err:
-            print(str(err))
-            return ""
+        dates = []
+        for s in statistics:
+            if s.get("join_at"):
+                try:
+                    dates.append(datetime.strptime(s.get("join_at"), '%Y-%m-%d %H:%M:%S'))
+                except Exception as err:
+                    print(str(err))
+                    pass
+        if dates:
+            return min(dates).strftime("%Y-%m-%d")
+        return ""
 
     @staticmethod
     def __todict(raw_statistics):
@@ -416,3 +420,12 @@ class SiteUserInfo(object):
                                "msg_unread": site.MSG_UNREAD
                                })
         return statistics
+
+    def update_site_name(self, old_name, name):
+        """
+        更新站点数据中的站点名称
+        """
+        self.dbhelper.update_site_user_statistics_site_name(name, old_name)
+        self.dbhelper.update_site_seed_info_site_name(name, old_name)
+        self.dbhelper.update_site_statistics_site_name(name, old_name)
+        return True

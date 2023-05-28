@@ -2,7 +2,7 @@ import json
 import time
 
 from app.helper import OcrHelper
-from app.sites.sitesignin._base import _ISiteSigninHandler
+from app.plugins.modules._autosignin._base import _ISiteSigninHandler
 from app.utils import StringUtils, RequestUtils
 from config import Config
 
@@ -45,6 +45,10 @@ class HDSky(_ISiteSigninHandler):
         if not index_res or index_res.status_code != 200:
             self.error(f"签到失败，请检查站点连通性")
             return False, f'【{site}】签到失败，请检查站点连通性'
+
+        if "login.php" in index_res.text:
+            self.error(f"签到失败，cookie失效")
+            return False, f'【{site}】签到失败，cookie失效'
 
         sign_status = self.sign_in_result(html_res=index_res.text,
                                           regexs=self._sign_regex)
@@ -116,7 +120,7 @@ class HDSky(_ISiteSigninHandler):
                     elif str(json.loads(res.text)["message"]) == "invalid_imagehash":
                         # 验证码错误
                         self.warn(f"签到失败：验证码错误")
-                        return False, f'【{site}】{site}签到失败：验证码错误'
+                        return False, f'【{site}】签到失败：验证码错误'
 
         self.error(f'签到失败：未获取到验证码')
-        return False, f'{site}签到失败：未获取到验证码'
+        return False, f'【{site}】签到失败：未获取到验证码'

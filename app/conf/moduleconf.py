@@ -42,6 +42,9 @@ class ModuleConf(object):
         "move": RmtMode.MOVE
     }
 
+    # 远程转移模式
+    REMOTE_RMT_MODES = [RmtMode.RCLONE, RmtMode.RCLONECOPY, RmtMode.MINIO, RmtMode.MINIOCOPY]
+
     # 消息通知类型
     MESSAGE_CONF = {
         "client": {
@@ -340,6 +343,51 @@ class ModuleConf(object):
                     }
                 }
             },
+             "ntfy": {
+                "name": "ntfy",
+                "img_url": "../static/img/message/ntfy.webp",
+                "color": "#409D8A",
+                "config": {
+                    "server": {
+                        "id": "ntfy_server",
+                        "required": True,
+                        "title": "ntfy服务器地址",
+                        "tooltip": "自己搭建ntfy服务端地址",
+                        "type": "text",
+                        "placeholder": "http://localhost:8800"
+                    },
+                    "token": {
+                        "id": "ntfy_token",
+                        "required": True,
+                        "title": "令牌Token",
+                        "tooltip": "ntfy服务端创建的token",
+                        "type": "text"
+                    },
+                     "topic": {
+                        "id": "ntfy_topic",
+                        "required": True,
+                        "title": "topic",
+                        "tooltip": "ntfy创建的topic",
+                        "type": "text"
+                    },
+                    "priority": {
+                        "id": "ntfy_priority",
+                        "required": False,
+                        "title": "消息Priority",
+                        "tooltip": "消息通知优先级, 请填写数字(1-5), 默认: 4",
+                        "type": "text",
+                        "placeholder": "4"
+                    },
+                    "tags": {
+                        "id": "ntfy_tags",
+                        "required": False,
+                        "title": "消息tags",
+                        "tooltip": "消息tags,以逗号分隔, 请参阅ntfy官网, 默认: rotating_light",
+                        "type": "text",
+                        "placeholder": "rotating_light"
+                    }
+                }
+            },
             "chanify": {
                 "name": "Chanify",
                 "img_url": "../static/img/message/chanify.png",
@@ -520,11 +568,9 @@ class ModuleConf(object):
         }
     }
 
-    # 网络测试对象
+    # 网络测试对象，TMDB API除外
     NETTEST_TARGETS = [
         "www.themoviedb.org",
-        "api.themoviedb.org",
-        "api.tmdb.org",
         "image.tmdb.org",
         "webservice.fanart.tv",
         "api.telegram.org",
@@ -738,6 +784,14 @@ class ModuleConf(object):
                     "title": "密码",
                     "type": "password",
                     "placeholder": ""
+                },
+                "play_host": {
+                    "id": "plex.play_host",
+                    "required": False,
+                    "title": "媒体播放地址",
+                    "tooltip": "配置播放设备的访问地址，用于媒体详情页跳转播放页面；如为https则需要增加https://前缀，留空则默认与服务器地址一致",
+                    "type": "text",
+                    "placeholder": "https://app.plex.tv"
                 }
             }
         },
@@ -749,6 +803,14 @@ class ModuleConf(object):
     # 发现过滤器
     DISCOVER_FILTER_CONF = {
         "tmdb_movie": {
+            "sort_by": {
+                "name": "排序",
+                "type": "dropdown",
+                "options": [{'value': '', 'name': '默认'},
+                            {'value': 'popularity.desc', 'name': '近期热度'},
+                            {'value': 'vote_average.desc', 'name': '高分优先'},
+                            {'value': 'release_date.desc', 'name': '首播时间'}]
+            },
             "with_genres": {
                 "name": "类型",
                 "type": "dropdown",
@@ -781,6 +843,14 @@ class ModuleConf(object):
             }
         },
         "tmdb_tv": {
+            "sort_by": {
+                "name": "排序",
+                "type": "dropdown",
+                "options": [{'value': '', 'name': '默认'},
+                            {'value': 'popularity.desc', 'name': '近期热度'},
+                            {'value': 'vote_average.desc', 'name': '高分优先'},
+                            {'value': 'first_air_date.desc', 'name': '首播时间'}]
+            },
             "with_genres": {
                 "name": "类型",
                 "type": "dropdown",

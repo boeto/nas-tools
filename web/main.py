@@ -1,8 +1,10 @@
 import base64
 import datetime
+import hashlib
 import mimetypes
 import os.path
 import re
+import time
 import traceback
 import urllib
 import xml.dom.minidom
@@ -17,6 +19,7 @@ from flask import Flask, request, json, render_template, make_response, session,
     redirect, Response
 from flask_compress import Compress
 from flask_login import LoginManager, login_user, login_required, current_user
+from flask_sock import Sock
 from icalendar import Calendar, Event, Alarm
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -38,7 +41,7 @@ from app.sync import Sync
 from app.torrentremover import TorrentRemover
 from app.utils import DomUtils, SystemUtils, ExceptionUtils, StringUtils
 from app.utils.types import *
-from config import PT_TRANSFER_INTERVAL, Config
+from config import PT_TRANSFER_INTERVAL, Config, TMDB_API_DOMAINS
 from web.action import WebAction
 from web.apiv1 import apiv1_bp
 from web.backend.WXBizMsgCrypt3 import WXBizMsgCrypt
@@ -55,8 +58,12 @@ App = Flask(__name__)
 App.wsgi_app = ProxyFix(App.wsgi_app)
 App.config['JSON_AS_ASCII'] = False
 App.config['JSON_SORT_KEYS'] = False
+App.config['SOCK_SERVER_OPTIONS'] = {'ping_interval': 25}
 App.secret_key = os.urandom(24)
 App.permanent_session_lifetime = datetime.timedelta(days=30)
+
+# Flask Socket
+Sock = Sock(App)
 
 # 启用压缩
 Compress(App)
@@ -66,7 +73,11 @@ LoginManager = LoginManager()
 LoginManager.login_view = "login"
 LoginManager.init_app(App)
 
-# API注册
+# SSE
+LoggingSource = ""
+LoggingLock = Lock()
+
+# 路由注册
 App.register_blueprint(apiv1_bp, url_prefix="/api/v1")
 
 # fix Windows registry stuff
@@ -124,6 +135,11 @@ def login():
         """
         跳转到导航页面
         """
+        # 存储当前用户
+        Config().current_user = current_user.username
+        # 让当前用户生效
+        MediaServer().init_config()
+        # 跳转页面
         if GoPage and GoPage != 'web':
             return redirect('/web#' + GoPage)
         else:
@@ -201,6 +217,7 @@ def web():
     CustomScriptCfg = SystemConfig().get(SystemConfigKey.CustomScript)
     CooperationSites = current_user.get_authsites()
     Menus = WebAction().get_user_menus().get("menus") or []
+    Commands = WebAction().get_commands()
     return render_template('navigation.html',
                            GoPage=GoPage,
                            CurrentUser=current_user,
@@ -217,7 +234,8 @@ def web():
                            CustomScriptCfg=CustomScriptCfg,
                            CooperationSites=CooperationSites,
                            DefaultPath=DefaultPath,
-                           Menus=Menus)
+                           Menus=Menus,
+                           Commands=Commands)
 
 
 # 开始
@@ -378,6 +396,11 @@ def sitelist():
                            Count=len(IndexerSites))
 
 
+# 唤起App中转页面
+@App.route('/open', methods=['POST', 'GET'])
+def open_app():
+    return render_template("openapp.html")
+
 # 站点资源页面
 @App.route('/resources', methods=['POST', 'GET'])
 @login_required
@@ -386,8 +409,11 @@ def resources():
     site_name = request.args.get("title")
     page = request.args.get("page") or 0
     keyword = request.args.get("keyword")
-    Results = WebAction().action("list_site_resources", {"id": site_id, "page": page, "keyword": keyword}).get(
-        "data") or []
+    Results = WebAction().list_site_resources({
+        "id": site_id,
+        "page": page,
+        "keyword": keyword
+    }).get("data") or []
     return render_template("site/resources.html",
                            Results=Results,
                            SiteId=site_id,
@@ -647,8 +673,6 @@ def service():
     RuleGroups = Filter().get_rule_groups()
     # 所有同步目录
     SyncPaths = Sync().get_sync_path_conf()
-    # 所有站点
-    SigninSites = Sites().get_site_dict(signin=True)
 
     # 所有服务
     Services = current_user.get_services()
@@ -697,30 +721,6 @@ def service():
             'state': sta_pttransfer,
         })
 
-    # 删种
-    if "autoremovetorrents" in Services:
-        torrent_remove_tasks = TorrentRemover().get_torrent_remove_tasks()
-        if torrent_remove_tasks:
-            Services['autoremovetorrents'].update({
-                'state': 'ON',
-                'time': '',
-            })
-        else:
-            Services.pop('autoremovetorrents')
-
-    # 自动签到
-    if "ptsignin" in Services:
-        tim_ptsignin = pt.get('ptsignin_cron')
-        if tim_ptsignin:
-            if str(tim_ptsignin).find(':') == -1:
-                tim_ptsignin = "%s 小时" % tim_ptsignin
-            Services['ptsignin'].update({
-                'state': 'ON',
-                'time': tim_ptsignin,
-            })
-        else:
-            Services.pop('ptsignin')
-
     # 目录同步
     if "sync" in Services:
         if Sync().monitor_sync_path_ids:
@@ -739,7 +739,6 @@ def service():
                            Count=len(Services),
                            RuleGroups=RuleGroups,
                            SyncPaths=SyncPaths,
-                           SigninSites=SigninSites,
                            SchedulerTasks=Services)
 
 
@@ -848,12 +847,16 @@ def basic():
         proxy = proxy.replace("http://", "")
     RmtModeDict = WebAction().get_rmt_modes()
     CustomScriptCfg = SystemConfig().get(SystemConfigKey.CustomScript)
+    ScraperConf = SystemConfig().get(SystemConfigKey.UserScraperConf) or {}
     return render_template("setting/basic.html",
                            Config=Config().get_config(),
                            Proxy=proxy,
                            RmtModeDict=RmtModeDict,
                            CustomScriptCfg=CustomScriptCfg,
-                           CurrentUser=current_user)
+                           CurrentUser=current_user,
+                           ScraperNfo=ScraperConf.get("scraper_nfo") or {},
+                           ScraperPic=ScraperConf.get("scraper_pic") or {},
+                           TmdbDomains=TMDB_API_DOMAINS)
 
 
 # 自定义识别词设置页面
@@ -922,12 +925,14 @@ def indexer():
     indexers = Indexer().get_indexers(check=False)
     private_count = len([item.id for item in indexers if not item.public])
     public_count = len([item.id for item in indexers if item.public])
+    indexer_sites = SystemConfig().get(SystemConfigKey.UserIndexerSites)
     return render_template("setting/indexer.html",
                            Config=Config().get_config(),
                            PrivateCount=private_count,
                            PublicCount=public_count,
                            Indexers=indexers,
-                           IndexerConf=ModuleConf.INDEXER_CONF)
+                           IndexerConf=ModuleConf.INDEXER_CONF,
+                           IndexerSites=indexer_sites)
 
 
 # 媒体库页面
@@ -1029,14 +1034,13 @@ def plugin():
 @action_login_check
 def do():
     try:
-        cmd = request.form.get("cmd")
-        data = request.form.get("data")
+        content = request.get_json()
+        cmd = content.get("cmd")
+        data = content.get("data") or {}
+        return WebAction().action(cmd, data)
     except Exception as e:
         ExceptionUtils.exception_traceback(e)
         return {"code": -1, "msg": str(e)}
-    if data:
-        data = json.loads(data)
-    return WebAction().action(cmd, data)
 
 
 # 目录事件响应
@@ -1199,11 +1203,19 @@ def plex_webhook():
         return '不允许的IP地址请求'
     request_json = json.loads(request.form.get('payload', {}))
     log.debug("收到Plex Webhook报文：%s" % str(request_json))
-    # 发送消息
-    ThreadHelper().start_thread(MediaServer().webhook_message_handler,
-                                (request_json, MediaServerType.PLEX))
-    # 触发事件
-    EventManager().send_event(EventType.PlexWebhook, request_json)
+    # 事件类型
+    event_match = request_json.get("event") in ["media.play", "media.stop", "library.new"]
+    # 媒体类型
+    type_match = request_json.get("Metadata", {}).get("type") in ["movie", "episode", "show"]
+    # 是否直播
+    is_live = request_json.get("Metadata", {}).get("live") == "1"
+    # 如果事件类型匹配,媒体类型匹配,不是直播
+    if event_match and type_match and not is_live:
+        # 发送消息
+        ThreadHelper().start_thread(MediaServer().webhook_message_handler,
+                                    (request_json, MediaServerType.PLEX))
+        # 触发事件
+        EventManager().send_event(EventType.PlexWebhook, request_json)
     return 'Ok'
 
 
@@ -1644,10 +1656,119 @@ def Img():
     url = request.args.get('url')
     if not url:
         return make_response("参数错误", 400)
-    return send_file(WebUtils.get_image_stream(url),
-                     mimetype='image/jpeg',
-                     download_name='image.jpg',
-                     as_attachment=True)
+    # 计算Etag
+    etag = hashlib.sha256(url.encode('utf-8')).hexdigest()
+    # 检查协商缓存
+    if_none_match = request.headers.get('If-None-Match')
+    if if_none_match and if_none_match == etag:
+        return make_response('', 304)
+    # 获取图片数据
+    response = Response(
+        WebUtils.request_cache(url),
+        mimetype='image/jpeg'
+    )
+    response.headers.set('Cache-Control', 'max-age=604800')
+    response.headers.set('Etag', etag)
+    return response
+
+
+@App.route('/stream-logging')
+@login_required
+def stream_logging():
+    """
+    实时日志EventSources响应
+    """
+    def __logging(_source=""):
+        """
+        实时日志
+        """
+        global LoggingSource
+
+        while True:
+            with LoggingLock:
+                if _source != LoggingSource:
+                    LoggingSource = _source
+                    log.LOG_INDEX = len(log.LOG_QUEUE)
+                if log.LOG_INDEX > 0:
+                    logs = list(log.LOG_QUEUE)[-log.LOG_INDEX:]
+                    log.LOG_INDEX = 0
+                    if _source:
+                        logs = [lg for lg in logs if lg.get("source") == _source]
+                else:
+                    logs = []
+                time.sleep(1)
+                yield 'data: %s\n\n' % json.dumps(logs)
+
+    return Response(
+        __logging(request.args.get("source") or ""),
+        mimetype='text/event-stream'
+    )
+
+
+@App.route('/stream-progress')
+@login_required
+def stream_progress():
+    """
+    实时日志EventSources响应
+    """
+    def __progress(_type):
+        """
+        实时日志
+        """
+        WA = WebAction()
+        while True:
+            time.sleep(0.2)
+            detail = WA.refresh_process({"type": _type})
+            yield 'data: %s\n\n' % json.dumps(detail)
+
+    return Response(
+        __progress(request.args.get("type")),
+        mimetype='text/event-stream'
+    )
+
+
+@Sock.route('/message')
+@login_required
+def message_handler(ws):
+    """
+    消息中心WebSocket
+    """
+    while True:
+        data = ws.receive()
+        if not data:
+            continue
+        try:
+            msgbody = json.loads(data)
+        except Exception as err:
+            print(str(err))
+            continue
+        if msgbody.get("text"):
+            # 发送的消息
+            WebAction().handle_message_job(msg=msgbody.get("text"),
+                                           in_from=SearchType.WEB,
+                                           user_id=current_user.username,
+                                           user_name=current_user.username)
+            ws.send((json.dumps({})))
+        else:
+            # 拉取消息
+            system_msg = WebAction().get_system_message(lst_time=msgbody.get("lst_time"))
+            messages = system_msg.get("message")
+            lst_time = system_msg.get("lst_time")
+            ret_messages = []
+            for message in list(reversed(messages)):
+                content = re.sub(r"#+", "<br>",
+                                 re.sub(r"<[^>]+>", "",
+                                        re.sub(r"<br/?>", "####", message.get("content"), flags=re.IGNORECASE)))
+                ret_messages.append({
+                    "level": "bg-red" if message.get("level") == "ERROR" else "",
+                    "title": message.get("title"),
+                    "content": content,
+                    "time": message.get("time")
+                })
+            ws.send((json.dumps({
+                "lst_time": lst_time,
+                "message": ret_messages
+            })))
 
 
 # base64模板过滤器

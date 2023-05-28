@@ -1,17 +1,17 @@
-from app.sites.sitesignin._base import _ISiteSigninHandler
+import json
+
+from app.plugins.modules._autosignin._base import _ISiteSigninHandler
 from app.utils import StringUtils, RequestUtils
 from config import Config
 
 
-class HaiDan(_ISiteSigninHandler):
+class PTerClub(_ISiteSigninHandler):
     """
-    海胆签到
+    猫签到
     """
     # 匹配的站点Url，每一个实现类都需要设置为自己的站点Url
-    site_url = "haidan.video"
+    site_url = "pterclub.com"
 
-    # 签到成功
-    _success_text = "已经打卡"
 
     @classmethod
     def match(cls, url):
@@ -34,24 +34,21 @@ class HaiDan(_ISiteSigninHandler):
         proxy = Config().get_proxies() if site_info.get("proxy") else None
 
         # 签到
-        RequestUtils(cookies=site_cookie,
-                     headers=ua,
-                     proxies=proxy
-                     ).get(url="https://www.haidan.video/signin.php")
-
-        # 获取页面html
-        html_res = RequestUtils(cookies=site_cookie,
+        sign_res = RequestUtils(cookies=site_cookie,
                                 headers=ua,
                                 proxies=proxy
-                                ).get_res(url="https://www.haidan.video")
-        if not html_res or html_res.status_code != 200:
-            self.error(f"签到失败，请检查站点连通性")
-            return False, f'【{site}】签到失败，请检查站点连通性'
-        # 判断是否已签到
-        # '已连续签到278天，此次签到您获得了100魔力值奖励!'
-        if self._success_text in html_res.text:
+                                ).get_res(url="https://pterclub.com/attendance-ajax.php")
+        if not sign_res or sign_res.status_code != 200:
+            self.error(f"签到失败，签到接口请求失败")
+            return False, f'【{site}】签到失败，请检查cookie是否失效'
+
+        sign_dict = json.loads(sign_res.text)
+        if sign_dict['status'] == '1':
+            # {"status":"1","data":" (签到已成功300)","message":"<p>这是您的第<b>237</b>次签到，
+            # 已连续签到<b>237</b>天。</p><p>本次签到获得<b>300</b>克猫粮。</p>"}
             self.info(f"签到成功")
             return True, f'【{site}】签到成功'
-
-        self.error(f"签到失败，签到接口返回 {html_res.text}")
-        return False, f'【{site}】签到失败'
+        else:
+            # {"status":"0","data":"抱歉","message":"您今天已经签到过了，请勿重复刷新。"}
+            self.info(f"今日已签到")
+            return True, f'【{site}】今日已签到'

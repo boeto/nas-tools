@@ -61,13 +61,6 @@ export class AccordionSeasons extends CustomElement {
                 ? seasons.list.map((episodes, episodes_index) => (
                   html`
                     <div class="row pt-3 pb-3 custom-border-top">
-                      <style>
-                        @media (min-width: 992px) {
-                          .custom-border-top {
-                            border-top: 1px var(--tblr-border-style) rgba(97,104,118,.16)!important;
-                          }
-                        }
-                      </style>
                       <div class="col-lg-8">
                         <h3>
                           ${seasons.list.length - episodes_index} - ${episodes.name}
@@ -87,7 +80,7 @@ export class AccordionSeasons extends CustomElement {
                       <div class="col-lg-4 align-self-center">
                         ${episodes.still_path ? html`
                           <custom-img style="height: auto;"
-                              img-class="rounded-4 object-cover"
+                              img-class="rounded-3 object-cover"
                               img-ratio="50%"
                               img-src="${episodes.still_path}"
                           ></custom-img>` : nothing}

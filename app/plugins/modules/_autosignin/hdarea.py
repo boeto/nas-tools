@@ -1,19 +1,19 @@
-from app.sites.sitesignin._base import _ISiteSigninHandler
+from app.plugins.modules._autosignin._base import _ISiteSigninHandler
 from app.utils import StringUtils, RequestUtils
 from config import Config
 
 
-class HDCity(_ISiteSigninHandler):
+class HDArea(_ISiteSigninHandler):
     """
-    城市签到
+    好大签到
     """
+    
     # 匹配的站点Url，每一个实现类都需要设置为自己的站点Url
-    site_url = "hdcity.city"
+    site_url = "hdarea.co"
 
     # 签到成功
-    _success_text = '本次签到获得魅力'
-    # 重复签到
-    _repeat_text = '已签到'
+    _success_text = "此次签到您获得"
+    _repeat_text = "请不要重复签到哦"
 
     @classmethod
     def match(cls, url):
@@ -36,13 +36,21 @@ class HDCity(_ISiteSigninHandler):
         proxy = Config().get_proxies() if site_info.get("proxy") else None
 
         # 获取页面html
+        data = {
+            'action': 'sign_in'
+        }
         html_res = RequestUtils(cookies=site_cookie,
                                 headers=ua,
                                 proxies=proxy
-                                ).get_res(url="https://hdcity.city/sign")
+                                ).post_res(url="https://www.hdarea.co/sign_in.php", data=data)
         if not html_res or html_res.status_code != 200:
             self.error(f"签到失败，请检查站点连通性")
             return False, f'【{site}】签到失败，请检查站点连通性'
+
+        if "login.php" in html_res.text:
+            self.error(f"签到失败，cookie失效")
+            return False, f'【{site}】签到失败，cookie失效'
+
         # 判断是否已签到
         # '已连续签到278天，此次签到您获得了100魔力值奖励!'
         if self._success_text in html_res.text:

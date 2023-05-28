@@ -1,5 +1,5 @@
-import io
 from functools import lru_cache
+from urllib.parse import quote
 
 import cn2an
 
@@ -23,13 +23,16 @@ class WebUtils:
         url = 'https://sp0.baidu.com/8aQDcjqpAAV3otqbppnN2DJv/api.php?co=&resource_id=6006&t=1529895387942&ie=utf8' \
               '&oe=gbk&cb=op_aladdin_callback&format=json&tn=baidu&' \
               'cb=jQuery110203920624944751099_1529894588086&_=1529894588088&query=%s' % ip
-        r = RequestUtils().get_res(url)
-        r.encoding = 'gbk'
-        html = r.text
         try:
-            c1 = html.split('location":"')[1]
-            c2 = c1.split('","')[0]
-            return c2
+            r = RequestUtils().get_res(url)
+            if r:
+                r.encoding = 'gbk'
+                html = r.text
+                c1 = html.split('location":"')[1]
+                c2 = c1.split('","')[0]
+                return c2
+            else:
+                return ""
         except Exception as err:
             ExceptionUtils.exception_traceback(err)
             return ""
@@ -52,21 +55,17 @@ class WebUtils:
         try:
             releases_update_only = Config().get_config("app").get("releases_update_only")
             version_res = RequestUtils(proxies=Config().get_proxies()).get_res(
-                "https://api.github.com/repos/NAStool/nas-tools/releases/latest")
-            commit_res = RequestUtils(proxies=Config().get_proxies()).get_res(
-                "https://api.github.com/repos/NAStool/nas-tools/commits/master")
-            if version_res and commit_res:
+                f"https://nastool.cn/{quote(WebUtils.get_current_version())}/update")
+            if version_res:
                 ver_json = version_res.json()
-                commit_json = commit_res.json()
-                if releases_update_only:
-                    version = f"{ver_json['tag_name']}"
-                else:
-                    version = f"{ver_json['tag_name']} {commit_json['sha'][:7]}"
-                url = ver_json["html_url"]
-                return version, url, True
+                version = ver_json.get("latest")
+                link = ver_json.get("link")
+                if version and releases_update_only:
+                    version = version.split()[0]
+                return version, link
         except Exception as e:
             ExceptionUtils.exception_traceback(e)
-        return None, None, False
+        return None, None
 
     @staticmethod
     def get_mediainfo_from_id(mtype, mediaid, wait=False):
@@ -194,17 +193,10 @@ class WebUtils:
     @staticmethod
     @lru_cache(maxsize=128)
     def request_cache(url):
+        """
+        带缓存的请求
+        """
         ret = RequestUtils().get_res(url)
         if ret:
             return ret.content
-        return None
-
-    @staticmethod
-    def get_image_stream(url):
-        """
-        根据地址下载图片
-        """
-        result = WebUtils.request_cache(url)
-        if result:
-            return io.BytesIO(result)
         return None

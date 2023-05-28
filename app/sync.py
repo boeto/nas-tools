@@ -91,7 +91,7 @@ class Sync(object):
             log.info(f"【Sync】读取到监控目录：{monpath}，{log_content1}转移方式：{syncmode_enum.value}{log_content2}")
             if not enabled:
                 log.info(f"【Sync】{monpath} 不进行监控和同步：手动关闭")
-            if target_path and not os.path.exists(target_path):
+            if target_path and not os.path.exists(target_path) and syncmode_enum not in ModuleConf.REMOTE_RMT_MODES:
                 log.info(f"【Sync】目的目录不存在，正在创建：{target_path}")
                 os.makedirs(target_path)
             if unknown_path and not os.path.exists(unknown_path):
@@ -333,7 +333,16 @@ class Sync(object):
                 log.info(f"{mon_path} 的监控服务启动")
             except Exception as e:
                 ExceptionUtils.exception_traceback(e)
-                log.error(f"{mon_path} 启动目录监控失败：{str(e)}")
+                err_msg = str(e)
+                if "inotify" in err_msg and "reached" in err_msg:
+                    log.warn(f"目录监控服务启动出现异常：{err_msg}，请在宿主机上（不是docker容器内）执行以下命令并重启："
+                             + """
+                             echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf
+                             echo fs.inotify.max_user_instances=524288 | sudo tee -a /etc/sysctl.conf
+                             sudo sysctl -p
+                             """)
+                else:
+                    log.error(f"{mon_path} 启动目录监控失败：{err_msg}")
 
     def stop_service(self):
         """
@@ -354,7 +363,7 @@ class Sync(object):
         """
         if not sid:
             sids = self._monitor_sync_path_ids
-        elif isinstance(sid ,list):
+        elif isinstance(sid, list):
             sids = sid
         else:
             sids = [sid]
@@ -401,3 +410,39 @@ class Sync(object):
         except Exception as err:
             ExceptionUtils.exception_traceback(err)
             log.error("【Sync】%s 同步失败：%s" % (event_path, str(err)))
+
+    def delete_sync_path(self, sid):
+        """
+        删除配置的同步目录
+        """
+        ret = self.dbhelper.delete_config_sync_path(sid=sid)
+        self.init_config()
+        return ret
+
+    def insert_sync_path(self, source, dest, unknown, mode, compatibility, rename, enabled, note=None):
+        """
+        添加同步目录配置
+        """
+        ret = self.dbhelper.insert_config_sync_path(source=source,
+                                                    dest=dest,
+                                                    unknown=unknown,
+                                                    mode=mode,
+                                                    compatibility=compatibility,
+                                                    rename=rename,
+                                                    enabled=enabled,
+                                                    note=note)
+        self.init_config()
+        return ret
+
+    def check_sync_paths(self, sid=None, compatibility=None, rename=None, enabled=None):
+        """
+        检查配置的同步目录
+        """
+        ret = self.dbhelper.check_config_sync_paths(
+            sid=sid,
+            compatibility=compatibility,
+            rename=rename,
+            enabled=enabled
+        )
+        self.init_config()
+        return ret
