@@ -48,7 +48,7 @@ COPY --chmod=755 *.py *.txt ./
 COPY --chmod=755 app/ ./app/
 COPY --chmod=755 web/ ./web/
 COPY --chmod=755 third_party/ ./third_party/
-COPY --chmod=755 docker/entrypoint.sh ./docker/
+COPY --chmod=755 docker/ ./docker/
 RUN mkdir ${HOME} \
     && addgroup -S nt -g 911 \
     && adduser -S nt -G nt -h ${HOME} -s /bin/bash -u 911 \
