@@ -9,7 +9,7 @@ on:
       - .github/workflows/build.yml
       - package_list.txt
       - requirements.txt
-      - Dockerfile
+      - docker/Dockerfile
 
 env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
