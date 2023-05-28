@@ -24,10 +24,8 @@ jobs:
       - name: Release version
         id: release_version
         run: |
-          app_version=$(cat version.py |sed -ne "s/APP_VERSION\s=\s'v\(.*\)'/\1/gp")
-          echo "app_version:::$app_version"
+          app_version=$(cat version.py | sed -e 's/[^0-9\.]//g')
           echo "app_version=$app_version" >> $GITHUB_ENV
-          echo "APP_VERSION=$app_version" >> $GITHUB_ENV
 
       - name: Set Up QEMU
         uses: docker/setup-qemu-action@v1
@@ -41,28 +39,10 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Check Vars
-        run: |
-          echo "env.app_version:::${{ env.app_version }}"
-          echo "env.APP_VERSION:::${{ env.APP_VERSION }}"
-          echo "#######################"
-          echo "pwd:::"
-          pwd
-          echo "#######################"
-          echo "ls::"
-          ls
-          echo "#######################"
-          echo "ls docker::"
-          ls docker
-          echo "#######################"
-          echo "ls workspace docker:::"
-          ls "${{ github.workspace }}/docker"
-          echo "#######################"
-
       - name: Build Image
         uses: docker/build-push-action@v2
         with:
-          context: docker
+          context: .
           file: Dockerfile.dev
           platforms: |
             linux/amd64
