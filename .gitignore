@@ -260,4 +260,5 @@ test-config*
 backup
 backup_*
 nohup.out
-config-docker-*
+config-test*
+config-dev*

@@ -37,10 +37,10 @@ function package_cn {
 function package_cn_debian {
 
     cp /etc/apt/sources.list /etc/apt/sources.list.bak
-    echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian/ bullseye main contrib non-free" > /etc/apt/sources.list
-    echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian/ bullseye-updates main contrib non-free" >> /etc/apt/sources.list
-    echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian/ bullseye-backports main contrib non-free" >> /etc/apt/sources.list
-    echo "deb https://security.debian.org/debian-security bullseye-security main contrib non-free" >> /etc/apt/sources.list
+    echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian/ bullseye main contrib non-free" >/etc/apt/sources.list
+    echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian/ bullseye-updates main contrib non-free" >>/etc/apt/sources.list
+    echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian/ bullseye-backports main contrib non-free" >>/etc/apt/sources.list
+    echo "deb https://security.debian.org/debian-security bullseye-security main contrib non-free" >>/etc/apt/sources.list
     apt-get update -y
     if [ $? -ne 0 ]; then
         echo "无法更换软件源，请更新镜像！"
@@ -54,9 +54,9 @@ function package_update {
 
     if grep -Eqi "Debian" /etc/issue || grep -Eq "Debian" /etc/os-release; then
         if [ "${NASTOOL_CN_UPDATE}" = "true" ]; then
-            package_list_debian_url=https://ghproxy.com/https://github.com/NAStool/nas-tools-builder/raw/main/debian/package_list.txt
+            package_list_debian_url=https://ghproxy.com/https://github.com/boeto/nas-tools-builder/raw/main/debian/package_list.txt
         else
-            package_list_debian_url=https://github.com/NAStool/nas-tools-builder/raw/main/debian/package_list.txt
+            package_list_debian_url=https://github.com/boeto/nas-tools-builder/raw/main/debian/package_list.txt
         fi
         if [ ! -f /tmp/package_list_debian.txt ]; then
             curl -L ${package_list_debian_url} -o /tmp/package_list_debian.txt
@@ -65,7 +65,7 @@ function package_update {
             curl -L ${package_list_debian_url} -o /tmp/package_list_debian.txt
         fi
         if [ ! -s /tmp/package_list_debian.txt.sha256sum ]; then
-            sha256sum /tmp/package_list_debian.txt > /tmp/package_list_debian.txt.sha256sum
+            sha256sum /tmp/package_list_debian.txt >/tmp/package_list_debian.txt.sha256sum
         fi
         hash_old=$(cat /tmp/package_list_debian.txt.sha256sum)
         hash_new=$(sha256sum /tmp/package_list_debian.txt)
@@ -82,7 +82,7 @@ function package_update {
                 echo "无法更新软件包，请更新镜像！"
             else
                 echo "软件包安装成功"
-                sha256sum /tmp/package_list_debian.txt > /tmp/package_list.txt.sha256sum
+                sha256sum /tmp/package_list_debian.txt >/tmp/package_list.txt.sha256sum
             fi
         fi
     else
@@ -98,7 +98,7 @@ function package_update {
                 echo "无法更新软件包，请更新镜像！"
             else
                 echo "软件包安装成功"
-                sha256sum package_list.txt > /tmp/package_list.txt.sha256sum
+                sha256sum package_list.txt >/tmp/package_list.txt.sha256sum
             fi
         fi
     fi
@@ -127,7 +127,7 @@ function requirements_update {
             exit 1
         else
             echo "依赖安装成功"
-            sha256sum requirements.txt > /tmp/requirements.txt.sha256sum
+            sha256sum requirements.txt >/tmp/requirements.txt.sha256sum
         fi
     fi
 
@@ -146,7 +146,7 @@ function third_party_update {
             exit 1
         else
             echo "第三方组件安装成功"
-            sha256sum third_party.txt > /tmp/third_party.txt.sha256sum
+            sha256sum third_party.txt >/tmp/third_party.txt.sha256sum
         fi
     fi
 
@@ -159,22 +159,22 @@ function __main {
     # 自动更新
     if [ "${NASTOOL_AUTO_UPDATE}" = "true" ]; then
         if [ ! -s /tmp/requirements.txt.sha256sum ]; then
-            sha256sum requirements.txt > /tmp/requirements.txt.sha256sum
+            sha256sum requirements.txt >/tmp/requirements.txt.sha256sum
         fi
         if [ ! -s /tmp/third_party.txt.sha256sum ]; then
-            sha256sum third_party.txt > /tmp/third_party.txt.sha256sum
+            sha256sum third_party.txt >/tmp/third_party.txt.sha256sum
         fi
         if [ ! -s /tmp/package_list.txt.sha256sum ]; then
-            sha256sum package_list.txt > /tmp/package_list.txt.sha256sum
+            sha256sum package_list.txt >/tmp/package_list.txt.sha256sum
         fi
         echo "更新主程序..."
-        git remote set-url origin "${REPO_URL}" &> /dev/null
-        echo "windows/" > .gitignore
+        git remote set-url origin "${REPO_URL}" &>/dev/null
+        echo "windows/" >.gitignore
         # 更新分支
         if [[ "${NASTOOL_VERSION}" == "dev" ]]; then
-        branch="dev"
+            branch="dev"
         else
-        branch="master"
+            branch="master"
         fi
 
         git clean -dffx

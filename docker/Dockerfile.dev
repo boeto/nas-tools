@@ -47,6 +47,8 @@ WORKDIR ${WORKDIR}
 COPY --chmod=755 *.py *.txt ./
 COPY --chmod=755 app/ ./app/
 COPY --chmod=755 web/ ./web/
+COPY --chmod=755 scripts/ ./scripts/
+COPY --chmod=755 config/ ./config/
 COPY --chmod=755 third_party/ ./third_party/
 COPY --chmod=755 docker/entrypoint.sh ./docker/
 RUN mkdir ${HOME} \
