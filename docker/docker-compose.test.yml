@@ -2,8 +2,8 @@ version: "3"
 services:
   nas-tools:
     build:
-      context: .
-      dockerfile: Dockerfile.test
+      context: ..
+      dockerfile: docker/Dockerfile.test
     image: nas-tools:latest-test
     ports:
       - 33000:3000 # 默认的webui控制端口
