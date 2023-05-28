@@ -74,7 +74,7 @@ jobs:
           cache-to: type=local,dest=/tmp/.buildx-cache
           push: true
           tags: |
-            ${{ env.DOCKER_USERNAME }}/nas-tools:lates
+            ${{ env.DOCKER_USERNAME }}/nas-tools:latest
             ${{ env.DOCKER_USERNAME }}/nas-tools:${{ env.app_version }}
 
       - name: Clean Up
