@@ -52,7 +52,7 @@ class _TestDoubanRank:
         doubanRank.init_config(config)
 
         douban_id = 35774728
-        # title = ("了不起的麦瑟尔夫人 第五季",)
+        douban_title = "了不起的麦瑟尔夫人 第五季"
 
         mtype = MediaType.TV
         mediaid = f"DB:{douban_id}"
@@ -83,7 +83,7 @@ class _TestDoubanRank:
                     media_info.begin_season = season.get("season_number")
                     assert media_info not in [None, {}]
                     # doubanRank.info(f"season:{season}")
-                    doubanRank.add_rss(media_info)
+                    doubanRank.add_rss(media_info, douban_title)
 
     def _test_refresh_rss(self):
         doubanRank.init_config(config)

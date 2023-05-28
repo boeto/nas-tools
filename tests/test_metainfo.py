@@ -17,7 +17,9 @@ class MetaInfoTest(TestCase):
         for info in meta_cases:
             if not info.get("title"):
                 continue
-            meta_info = MetaInfo(title=info.get("title"), subtitle=info.get("subtitle"))
+            meta_info = MetaInfo(
+                title=info.get("title"), subtitle=info.get("subtitle")
+            )
             target = {
                 "type": meta_info.type.value,
                 "cn_name": meta_info.cn_name or "",
@@ -29,6 +31,6 @@ class MetaInfoTest(TestCase):
                 "restype": meta_info.get_edtion_string(),
                 "pix": meta_info.resource_pix or "",
                 "video_codec": meta_info.video_encode or "",
-                "audio_codec": meta_info.audio_encode or ""
+                "audio_codec": meta_info.audio_encode or "",
             }
             self.assertEqual(target, info.get("target"))

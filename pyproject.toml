@@ -168,6 +168,11 @@ exclude = '''
     | buck-out
     | build
     | dist
+    | third_party
+    | package
+    | docker
+    | config-test*
+    | config-dev*
   )/
   | foo.py          # also separately exclude a file named foo.py in
                     # the root of the project
@@ -204,6 +209,11 @@ omit = [
   '*/tests/*',
   # omit anything in a .venv directory anywhere
   '.venv/*',
+  'third_party/*',
+  'package/*',
+  'docker/*',
+  'config-test*/*',
+  'config-dev*/*',
 ]
 [tool.coverage.report]
 skip_empty = true
