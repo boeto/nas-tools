@@ -39,10 +39,12 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: check vars
+      - name: Check Vars
         run: |
-          echo "app_version=$app_version"
+          echo "${{ env.app_version }}"
           pwd
+          ls
+          ls docker/
 
       - name: Build Image
         uses: docker/build-push-action@v2
