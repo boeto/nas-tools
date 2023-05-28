@@ -1,0 +1,28 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: Current File",
+      "type": "python",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal",
+      "redirectOutput": true,
+      "justMyCode": true
+    },
+
+    {
+      "name": "Pytest: Current file",
+      "type": "python",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["-s", "${file}"],
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/app",
+        "NASTOOL_CONFIG": "${workspaceFolder}/config-test/config.yaml"
+      },
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}
