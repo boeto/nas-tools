@@ -1,5 +1,4 @@
 FROM alpine:3.17 AS Builder
-WORKDIR /app
 COPY --chmod=755 package_list.txt /app/package_list.txt
 COPY --chmod=755 requirements.txt /app/requirements.txt
 RUN apk add --no-cache --virtual .build-deps \
@@ -19,7 +18,7 @@ RUN apk add --no-cache --virtual .build-deps \
     && pip install -r /app/requirements.txt \
     && apk del --purge .build-deps \
     && rm -rf /tmp/* /root/.cache /var/cache/apk/*
-COPY --chmod=755 ./docker/rootfs /
+COPY --chmod=755 ./rootfs /
 FROM scratch AS APP
 COPY --from=Builder / /
 ENV S6_SERVICES_GRACETIME=30000 \
@@ -34,7 +33,7 @@ ENV S6_SERVICES_GRACETIME=30000 \
     NASTOOL_CONFIG="/config/config.yaml" \
     NASTOOL_AUTO_UPDATE=true \
     NASTOOL_CN_UPDATE=true \
-    NASTOOL_VERSION=dev \
+    NASTOOL_VERSION=master \
     PS1="\u@\h:\w \$ " \
     REPO_URL="https://github.com/boeto/nas-tools.git" \
     PYPI_MIRROR="https://pypi.tuna.tsinghua.edu.cn/simple" \
@@ -58,8 +57,8 @@ RUN mkdir ${HOME} \
     && echo 'fs.inotify.max_user_instances=5242880' >> /etc/sysctl.conf \
     && echo "nt ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers \
     && git config --global pull.ff only \
-    # && git clone -b dev ${REPO_URL} ${WORKDIR} --depth=1 --recurse-submodule \
-    && git config --global --add safe.directory ${WORKDIR} 
+    # && git clone -b master ${REPO_URL} ${WORKDIR} --depth=1 --recurse-submodule \
+    && git config --global --add safe.directory ${WORKDIR}
 # && chmod +x /nas-tools/docker/entrypoint.sh
 EXPOSE 3000
 VOLUME ["/config"]
