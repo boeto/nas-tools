@@ -2,8 +2,15 @@ import xml.dom.minidom
 
 from app.db import MainDb, DbPersist
 from app.db.models import RSSTORRENTS
-from app.utils import RssTitleUtils, StringUtils, RequestUtils, ExceptionUtils, DomUtils
+from app.utils import (
+    RssTitleUtils,
+    StringUtils,
+    RequestUtils,
+    ExceptionUtils,
+    DomUtils,
+)
 from config import Config
+import log
 
 
 class RssHelper:
@@ -18,12 +25,12 @@ class RssHelper:
         :return: 种子信息列表，如为None代表Rss过期
         """
         _special_title_sites = {
-            'pt.keepfrds.com': RssTitleUtils.keepfriends_title
+            "pt.keepfrds.com": RssTitleUtils.keepfriends_title
         }
 
         _rss_expired_msg = [
             "RSS 链接已过期, 您需要获得一个新的!",
-            "RSS Link has expired, You need to get a new one!"
+            "RSS Link has expired, You need to get a new one!",
         ]
 
         # 开始处理
@@ -32,7 +39,9 @@ class RssHelper:
             return []
         site_domain = StringUtils.get_url_domain(url)
         try:
-            ret = RequestUtils(proxies=Config().get_proxies() if proxy else None).get_res(url)
+            ret = RequestUtils(
+                proxies=Config().get_proxies() if proxy else None
+            ).get_res(url)
             if not ret:
                 return []
             ret.encoding = ret.apparent_encoding
@@ -54,13 +63,19 @@ class RssHelper:
                             continue
                         # 标题特殊处理
                         if site_domain and site_domain in _special_title_sites:
-                            title = _special_title_sites.get(site_domain)(title)
+                            title = _special_title_sites.get(site_domain)(
+                                title
+                            )
                         # 描述
-                        description = DomUtils.tag_value(item, "description", default="")
+                        description = DomUtils.tag_value(
+                            item, "description", default=""
+                        )
                         # 种子页面
                         link = DomUtils.tag_value(item, "link", default="")
                         # 种子链接
-                        enclosure = DomUtils.tag_value(item, "enclosure", "url", default="")
+                        enclosure = DomUtils.tag_value(
+                            item, "enclosure", "url", default=""
+                        )
                         if not enclosure and not link:
                             continue
                         # 部分RSS只有link没有enclosure
@@ -68,23 +83,29 @@ class RssHelper:
                             enclosure = link
                             link = None
                         # 大小
-                        size = DomUtils.tag_value(item, "enclosure", "length", default=0)
+                        size = DomUtils.tag_value(
+                            item, "enclosure", "length", default=0
+                        )
                         if size and str(size).isdigit():
                             size = int(size)
                         else:
                             size = 0
                         # 发布日期
-                        pubdate = DomUtils.tag_value(item, "pubDate", default="")
+                        pubdate = DomUtils.tag_value(
+                            item, "pubDate", default=""
+                        )
                         if pubdate:
                             # 转换为时间
                             pubdate = StringUtils.get_time_stamp(pubdate)
                         # 返回对象
-                        tmp_dict = {'title': title,
-                                    'enclosure': enclosure,
-                                    'size': size,
-                                    'description': description,
-                                    'link': link,
-                                    'pubdate': pubdate}
+                        tmp_dict = {
+                            "title": title,
+                            "enclosure": enclosure,
+                            "size": size,
+                            "description": description,
+                            "link": link,
+                            "pubdate": pubdate,
+                        }
                         ret_array.append(tmp_dict)
                     except Exception as e1:
                         ExceptionUtils.exception_traceback(e1)
@@ -109,8 +130,9 @@ class RssHelper:
                 TITLE=media_info.title,
                 YEAR=media_info.year,
                 SEASON=media_info.get_season_string(),
-                EPISODE=media_info.get_episode_string()
-            ))
+                EPISODE=media_info.get_episode_string(),
+            )
+        )
 
     def is_rssd_by_enclosure(self, enclosure):
         """
@@ -118,7 +140,12 @@ class RssHelper:
         """
         if not enclosure:
             return True
-        if self._db.query(RSSTORRENTS).filter(RSSTORRENTS.ENCLOSURE == enclosure).count() > 0:
+        if (
+            self._db.query(RSSTORRENTS)
+            .filter(RSSTORRENTS.ENCLOSURE == enclosure)
+            .count()
+            > 0
+        ):
             return True
         else:
             return False
@@ -130,9 +157,17 @@ class RssHelper:
         if not torrent_name and not enclosure:
             return True
         if enclosure:
-            ret = self._db.query(RSSTORRENTS).filter(RSSTORRENTS.ENCLOSURE == enclosure).count()
+            ret = (
+                self._db.query(RSSTORRENTS)
+                .filter(RSSTORRENTS.ENCLOSURE == enclosure)
+                .count()
+            )
         else:
-            ret = self._db.query(RSSTORRENTS).filter(RSSTORRENTS.TORRENT_NAME == torrent_name).count()
+            ret = (
+                self._db.query(RSSTORRENTS)
+                .filter(RSSTORRENTS.TORRENT_NAME == torrent_name)
+                .count()
+            )
         return True if ret > 0 else False
 
     @DbPersist(_db)
@@ -140,22 +175,41 @@ class RssHelper:
         """
         将RSS的记录插入数据库
         """
-        self._db.insert(
-            RSSTORRENTS(
-                TORRENT_NAME=title,
-                ENCLOSURE=enclosure
-            ))
+        self._db.insert(RSSTORRENTS(TORRENT_NAME=title, ENCLOSURE=enclosure))
 
     @DbPersist(_db)
-    def simple_delete_rss_torrents(self, title, enclosure=None):
+    def simple_delete_rss_torrents(
+        self, title, enclosure=None, contains=False
+    ):
         """
         删除RSS的记录
+        :param title: 需要删除的内容
+        :param enclosure: 需要删除的enclosure
+        :param contains: 是否使用包含方式匹配删除的内容
         """
-        if enclosure:
-            self._db.query(RSSTORRENTS).filter(RSSTORRENTS.TORRENT_NAME == title,
-                                               RSSTORRENTS.ENCLOSURE == enclosure).delete()
+        if contains:
+            if enclosure:
+                self._db.query(RSSTORRENTS).filter(
+                    RSSTORRENTS.TORRENT_NAME.like("%" + title + "%"),
+                    RSSTORRENTS.ENCLOSURE == enclosure,
+                ).delete()
+            else:
+                self._db.query(RSSTORRENTS).filter(
+                    RSSTORRENTS.TORRENT_NAME.like("%" + title + "%")
+                ).delete()
+
         else:
-            self._db.query(RSSTORRENTS).filter(RSSTORRENTS.TORRENT_NAME == title).delete()
+            if enclosure:
+                self._db.query(RSSTORRENTS).filter(
+                    RSSTORRENTS.TORRENT_NAME == title,
+                    RSSTORRENTS.ENCLOSURE == enclosure,
+                ).delete()
+            else:
+                self._db.query(RSSTORRENTS).filter(
+                    RSSTORRENTS.TORRENT_NAME == title
+                ).delete()
+
+        log.debug(f"已从 RSSTORRENTS 表中删除 {title}")
 
     @DbPersist(_db)
     def truncate_rss_history(self):

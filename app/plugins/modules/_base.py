@@ -34,6 +34,7 @@ class _IPluginModule(metaclass=ABCMeta):
     - get_command() 获取插件命令，使用消息机制通过远程控制
 
     """
+
     # 插件名称
     module_name = ""
     # 插件描述
@@ -130,9 +131,9 @@ class _IPluginModule(metaclass=ABCMeta):
             return
         if self.__is_obj(value):
             value = json.dumps(value)
-        DbHelper().insert_plugin_history(plugin_id=self.__class__.__name__,
-                                         key=key,
-                                         value=value)
+        DbHelper().insert_plugin_history(
+            plugin_id=self.__class__.__name__, key=key, value=value
+        )
 
     def get_history(self, key=None, plugin_id=None):
         """
@@ -173,26 +174,40 @@ class _IPluginModule(metaclass=ABCMeta):
             plugin_id = self.__class__.__name__
         if self.__is_obj(value):
             value = json.dumps(value)
-        return DbHelper().update_plugin_history(plugin_id=plugin_id, key=key, value=value)
+        return DbHelper().update_plugin_history(
+            plugin_id=plugin_id, key=key, value=value
+        )
 
-    def delete_history(self, key, plugin_id=None):
+    def delete_history(self, key=None, plugin_id=None, is_delete_all=False):
         """
         删除插件运行数据
+        :param key: 删除单条数据时，需要指定key
+        :param plugin_id: 插件ID
+        :param is_delete_all: 是否删除所有数据
         """
-        if not key:
+        if not key and not is_delete_all:
             return False
+
         if not plugin_id:
             plugin_id = self.__class__.__name__
-        return DbHelper().delete_plugin_history(plugin_id=plugin_id, key=key)
+
+        if is_delete_all:
+            return DbHelper().delete_plugin_history(
+                plugin_id=plugin_id, is_delete_all=True
+            )
+        else:
+            return DbHelper().delete_plugin_history(
+                plugin_id=plugin_id, key=key
+            )
 
     @staticmethod
     def send_message(title, text=None, image=None):
         """
         发送消息
         """
-        return Message().send_plugin_message(title=title,
-                                             text=text,
-                                             image=image)
+        return Message().send_plugin_message(
+            title=title, text=text, image=image
+        )
 
     def info(self, msg):
         """
