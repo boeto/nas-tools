@@ -1,15 +1,15 @@
 name: NAStool Docker Dev
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - dev
-    paths:
-      - version.py
-      - .github/workflows/build-dev.yml
-      - package_list.txt
-      - requirements.txt
-      - docker/dev.Dockerfile
+  # push:
+  #   branches:
+  #     - dev
+  #   paths:
+  #     - version.py
+  #     - .github/workflows/build-dev.yml
+  #     - package_list.txt
+  #     - requirements.txt
+  #     - docker/dev.Dockerfile
 
 jobs:
   build:
@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@master
+        with:
+          submodules: "true"
 
       - name: Release version
         id: release_version
@@ -41,7 +43,7 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           context: docker
-          file: docker/dev.Dockerfile
+          file: Dockerfile.dev
           platforms: |
             linux/amd64
             linux/arm64
