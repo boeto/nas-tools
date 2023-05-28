@@ -1,4 +1,4 @@
-name: NAStool Docker Prod
+name: NAStool Docker
 on:
   workflow_dispatch:
   push:
@@ -9,7 +9,7 @@ on:
       - .github/workflows/build.yml
       - package_list.txt
       - requirements.txt
-      - Dockerfile.prod
+      - Dockerfile
 
 env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
@@ -66,7 +66,7 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           context: .
-          file: docker/Dockerfile.prod
+          file: docker/Dockerfile
           platforms: |
             linux/amd64
             linux/arm64
