@@ -19,7 +19,7 @@ RUN apk add --no-cache --virtual .build-deps \
     && apk del --purge .build-deps \
     && rm -rf /tmp/* /root/.cache /var/cache/apk/* \
     /app/package_list.txt /app/requirements.txt
-COPY --chmod=755 ./rootfs /
+COPY --chmod=755 ./docker/rootfs /
 FROM scratch AS APP
 COPY --from=Builder / /
 ENV S6_SERVICES_GRACETIME=30000 \
