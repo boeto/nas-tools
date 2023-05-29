@@ -17,7 +17,7 @@ Docker：
 
 TG频道：<https://t.me/nastool_official>
 
-Wiki：<https://wiki.nastool.cn>
+Wiki：<https://wiki.nastool.org>
 
 API: <http://localhost:3000/api/v1/>
 

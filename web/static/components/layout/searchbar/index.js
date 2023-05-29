@@ -273,7 +273,7 @@ export class LayoutSearchbar extends CustomElement {
               </a>
               <div class="dropdown-divider"></div>
               <a
-                href="https://wiki.nastool.cn"
+                href="https://wiki.nastool.org"
                 target="_blank"
                 class="dropdown-item"
                 >帮助中心</a
