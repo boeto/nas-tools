@@ -260,5 +260,6 @@ test-config*
 backup
 backup_*
 nohup.out
+config-prod*
 config-test*
 config-dev*

@@ -4,7 +4,7 @@ import xml.dom.minidom
 from datetime import datetime, timedelta
 from threading import Event
 
-import pytz
+import pytz  # type: ignore
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from jinja2 import Template
@@ -108,7 +108,7 @@ class DoubanRank(_IPluginModule):
                 self._rss_addrs = []
             self._ranks = config.get("ranks") or []
 
-            self.info(f"DoubanRank config: {config}")
+            self.debug(f"DoubanRank config: {config}")
 
         # 停止现有任务
         self.stop_service()
@@ -217,7 +217,8 @@ class DoubanRank(_IPluginModule):
                             "tooltip": (
                                 "打开后立即运行一次（点击此对话框的确定按钮后即会运行，"
                                 "周期未设置也会运行），"
-                                "关闭后将仅按照刮削周期运行（同时上次触发运行的任务如果在运行中也会停止）"
+                                "关闭后将仅按照刮削周期运行"
+                                "（同时上次触发运行的任务如果在运行中也会停止）"
                             ),
                             "type": "switch",
                             "id": "onlyonce",
@@ -234,7 +235,7 @@ class DoubanRank(_IPluginModule):
                         {
                             "title": "立即删除全部订阅历史和缓存记录",
                             "required": "",
-                            "tooltip": "开启后立即删除全部豆瓣的订阅历史和缓存记录，所有订阅将重新解析。",
+                            "tooltip": "开启后，立即删除全部豆瓣的订阅历史和缓存记录，所有订阅将重新解析。",  # noqa E501
                             "type": "switch",
                             "id": "is_delete_history_all",
                         },
@@ -245,7 +246,7 @@ class DoubanRank(_IPluginModule):
                             "required": "required",
                             "tooltip": (
                                 "榜单数据刷新的时间周期，"
-                                "支持5位cron表达式；应根据榜单更新的周期合理设置刷新时间，"
+                                "支持5位cron表达式；应根据榜单更新的周期合理设置刷新时间，"  # noqa E501
                                 "避免刷新过于频繁"
                             ),
                             "type": "text",
@@ -259,7 +260,7 @@ class DoubanRank(_IPluginModule):
                         {
                             "title": "评分",
                             "required": "",
-                            "tooltip": "大于该评分的才会被订阅（以TMDB评分为准），不填则不限制",
+                            "tooltip": "大于该评分的才会被订阅（以TMDB评分为准），不填则不限制",  # noqa E501
                             "type": "text",
                             "content": [
                                 {
@@ -275,13 +276,18 @@ class DoubanRank(_IPluginModule):
                             "required": "",
                             "tooltip": (
                                 "每一行一个RSS地址，访问"
-                                " https://docs.rsshub.app/social-media.html#dou-ban"
+                                " https://docs.rsshub.app/social-media."
+                                "html#dou-ban"
                                 " 查询可用地址"
                             ),
                             "type": "textarea",
                             "content": {
                                 "id": "rss_addrs",
-                                "placeholder": "https://rsshub.app/douban/movie/classification/:sort?/:score?/:tags?",
+                                "placeholder": (
+                                    "https://rsshub.app/douban/"
+                                    "movie/classification/"
+                                    ":sort?/:score?/:tags?"
+                                ),
                                 "rows": 5,
                             },
                         }
@@ -744,7 +750,8 @@ ajax_post(
                 season=media_info.get_season_string(),
             ):
                 self.info(
-                    f"{media_info.get_title_string()}{media_info.get_season_string()} 已订阅过"
+                    f"{media_info.get_title_string()}"
+                    f" {media_info.get_season_string()} 已订阅过"
                 )
                 self.__update_history(
                     douban_title, media_info=media_info, state="RSS"
@@ -763,8 +770,8 @@ ajax_post(
             )
             if not rss_media or code != 0:
                 self.warn(
-                    f"{media_info.get_title_string()} {media_info.get_season_string()} "
-                    f" 添加订阅失败: {msg}"
+                    f"{media_info.get_title_string()}"
+                    f" {media_info.get_season_string()} 添加订阅失败: {msg}"
                 )
 
                 # 订阅已存在
@@ -774,7 +781,8 @@ ajax_post(
                     )
             else:
                 self.info(
-                    f"{media_info.get_title_string()} {media_info.get_season_string()} 添加订阅成功"
+                    f"{media_info.get_title_string()}"
+                    f" {media_info.get_season_string()} 添加订阅成功"
                 )
                 self.__update_history(
                     douban_title,

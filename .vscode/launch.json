@@ -11,7 +11,7 @@
         "FLASK_APP": "${workspaceFolder}/run.py",
         "FLASK_DEBUG": "1"
       },
-      "args": ["run", "--port=3000", "--no-debugger", "--no-reload"],
+      "args": ["run", "--port=3001", "--no-debugger", "--no-reload"],
       "jinja": true,
       "justMyCode": true
     },

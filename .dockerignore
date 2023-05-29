@@ -21,3 +21,4 @@ nohup.out
 
 config-test*
 config-dev*
+config-prod*
