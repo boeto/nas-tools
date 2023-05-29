@@ -1,15 +1,19 @@
 name: NAStool Docker Dev
 on:
   workflow_dispatch:
-  # push:
-  #   branches:
-  #     - dev
-  #   paths:
-  #     - version.py
-  #     - .github/workflows/build-dev.yml
-  #     - package_list.txt
-  #     - requirements.txt
-  #     - docker/dev.Dockerfile
+  push:
+    branches:
+      - dev
+    paths:
+      - version.py
+      - .github/workflows/build-dev.yml
+      - package_list.txt
+      - requirements.txt
+      - docker/Dockerfile.dev
+
+env:
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
 
 jobs:
   build:
@@ -17,36 +21,63 @@ jobs:
     name: Build Docker Image
     steps:
       - name: Checkout
-        uses: actions/checkout@master
+        uses: actions/checkout@v3
         with:
           submodules: "true"
 
       - name: Release version
         id: release_version
         run: |
-          app_version=$(cat version.py |sed -ne "s/APP_VERSION\s=\s'v\(.*\)'/\1/gp")
+          app_version=$(cat version.py | sed -e 's/[^0-9\.]//g')
           echo "app_version=$app_version" >> $GITHUB_ENV
 
+      - name: Cache QEMU and Buildx
+        id: cache-tools
+        uses: actions/cache@v3
+        with:
+          path: |
+            ${{ env.HOME }}/.cache/docker
+          key: ${{ runner.os }}-tools-${{ hashFiles('**/Dockerfile') }}
+          restore-keys: |
+            ${{ runner.os }}-tools-
+
       - name: Set Up QEMU
-        uses: docker/setup-qemu-action@v1
+        uses: docker/setup-qemu-action@v2
 
       - name: Set Up Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v2
 
       - name: Login DockerHub
-        uses: docker/login-action@v1
+        uses: docker/login-action@v2
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          username: ${{ env.DOCKER_USERNAME }}
+          password: ${{ env.DOCKER_PASSWORD }}
+
+      - name: Cache Docker Buildx
+        id: cache-buildx
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ env.GITHUB_SHA }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
 
       - name: Build Image
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v3
         with:
-          context: docker
-          file: Dockerfile.dev
+          context: .
+          file: docker/Dockerfile.dev
           platforms: |
             linux/amd64
             linux/arm64
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache
           push: true
           tags: |
-            ${{ secrets.DOCKER_USERNAME }}/nas-tools:latest-beta
+            ${{ env.DOCKER_USERNAME }}/nas-tools:dev
+            ${{ env.DOCKER_USERNAME }}/nas-tools:dev-${{ env.app_version }}
+
+      - name: Clean Up
+        run: |
+          docker buildx stop
+          docker buildx rm

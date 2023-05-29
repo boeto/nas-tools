@@ -18,7 +18,8 @@ RUN apk add --no-cache --virtual .build-deps \
     && pip install cython \
     && pip install -r /app/requirements.txt \
     && apk del --purge .build-deps \
-    && rm -rf /tmp/* /root/.cache /var/cache/apk/*
+    && rm -rf /tmp/* /root/.cache /var/cache/apk/* \
+    /app/package_list.txt /app/requirements.txt
 COPY --chmod=755 ./docker/rootfs /
 FROM scratch AS APP
 COPY --from=Builder / /
@@ -47,6 +48,8 @@ WORKDIR ${WORKDIR}
 COPY --chmod=755 *.py *.txt ./
 COPY --chmod=755 app/ ./app/
 COPY --chmod=755 web/ ./web/
+COPY --chmod=755 scripts/ ./scripts/
+COPY --chmod=755 config/ ./config/
 COPY --chmod=755 third_party/ ./third_party/
 COPY --chmod=755 docker/entrypoint.sh ./docker/
 RUN mkdir ${HOME} \
@@ -57,10 +60,10 @@ RUN mkdir ${HOME} \
     && echo 'fs.inotify.max_user_watches=5242880' >> /etc/sysctl.conf \
     && echo 'fs.inotify.max_user_instances=5242880' >> /etc/sysctl.conf \
     && echo "nt ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers \
+    && git config --global init.defaultBranch ${NASTOOL_VERSION} \
     && git config --global pull.ff only \
-    # && git clone -b dev ${REPO_URL} ${WORKDIR} --depth=1 --recurse-submodule \
     && git config --global --add safe.directory ${WORKDIR} \
-    && chmod +x /nas-tools/docker/entrypoint.sh
+    && git init
 EXPOSE 3000
 VOLUME ["/config"]
 ENTRYPOINT [ "/init" ]

@@ -1,0 +1,42 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: Flask",
+      "type": "python",
+      "request": "launch",
+      "module": "flask",
+      "env": {
+        "NASTOOL_CONFIG": "${workspaceFolder}/config-test/config.yaml",
+        "FLASK_APP": "${workspaceFolder}/run.py",
+        "FLASK_DEBUG": "1"
+      },
+      "args": ["run", "--port=3001", "--no-debugger", "--no-reload"],
+      "jinja": true,
+      "justMyCode": true
+    },
+    {
+      "name": "Python: Current File",
+      "type": "python",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal",
+      "redirectOutput": true,
+      "justMyCode": true
+    },
+
+    {
+      "name": "Pytest: Current file",
+      "type": "python",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["-s", "${file}"],
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/app",
+        "NASTOOL_CONFIG": "${workspaceFolder}/config-test/config.yaml"
+      },
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}

@@ -1,3 +1,5 @@
+# ReadME
+
 ## 特点
 
 - 基于alpine实现，镜像体积小；
@@ -14,17 +16,17 @@
 
 ## 创建
 
-**注意**
+### 注意
 
-- 媒体目录的设置必须符合 [配置说明](https://github.com/NAStool/nas-tools#%E9%85%8D%E7%BD%AE) 的要求。
+- 媒体目录的设置必须符合 [配置说明](https://github.com/boeto/nas-tools#%E9%85%8D%E7%BD%AE) 的要求。
 
-- umask含义详见：http://www.01happy.com/linux-umask-analyze 。
+- umask含义详见：<http://www.01happy.com/linux-umask-analyze> 。
 
-- 创建后请根据 [配置说明](https://github.com/NAStool/nas-tools#%E9%85%8D%E7%BD%AE) 及该文件本身的注释，修改`config/config.yaml`，修改好后再重启容器，最后访问`http://<ip>:<web_port>`。
+- 创建后请根据 [配置说明](https://github.com/boeto/nas-tools#%E9%85%8D%E7%BD%AE) 及该文件本身的注释，修改`config/config.yaml`，修改好后再重启容器，最后访问`http://<ip>:<web_port>`。
 
-**docker cli**
+### docker cli
 
-```
+```bash
 docker run -d \
     --name nas-tools \
     --hostname nas-tools \
@@ -34,34 +36,32 @@ docker run -d \
     -e PUID=0     `# 想切换为哪个用户来运行程序，该用户的uid，详见下方说明` \
     -e PGID=0     `# 想切换为哪个用户来运行程序，该用户的gid，详见下方说明` \
     -e UMASK=000  `# 掩码权限，默认000，可以考虑设置为022` \
-    -e NASTOOL_AUTO_UPDATE=false `# 如需在启动容器时自动升级程程序请设置为true` \
     -e NASTOOL_CN_UPDATE=false `# 如果开启了容器启动自动升级程序，并且网络不太友好时，可以设置为true，会使用国内源进行软件更新` \
-    jxxghp/nas-tools
+    boeto/nas-tools
 ```
 
-如果你访问github的网络不太好，可以考虑在创建容器时增加设置一个环境变量`-e REPO_URL="https://ghproxy.com/https://github.com/NAStool/nas-tools.git" \`。
+如果你访问github的网络不太好，可以考虑在创建容器时增加设置一个环境变量`-e REPO_URL="https://ghproxy.com/https://github.com/boeto/nas-tools.git" \`。
 
-**docker-compose**
+### docker-compose
 
 新建`docker-compose.yaml`文件如下，并以命令`docker-compose up -d`启动。
 
-```
+```yml
 version: "3"
 services:
   nas-tools:
-    image: jxxghp/nas-tools:latest
+    image: boeto/nas-tools:latest
     ports:
       - 3000:3000        # 默认的webui控制端口
     volumes:
       - ./config:/config   # 冒号左边请修改为你想保存配置的路径
       - /你的媒体目录:/你想设置的容器内能见到的目录   # 媒体目录，多个目录需要分别映射进来，需要满足配置文件说明中的要求
-    environment: 
+    environment:
       - PUID=0    # 想切换为哪个用户来运行程序，该用户的uid
       - PGID=0    # 想切换为哪个用户来运行程序，该用户的gid
       - UMASK=000 # 掩码权限，默认000，可以考虑设置为022
-      - NASTOOL_AUTO_UPDATE=false  # 如需在启动容器时自动升级程程序请设置为true
       - NASTOOL_CN_UPDATE=false # 如果开启了容器启动自动升级程序，并且网络不太友好时，可以设置为true，会使用国内源进行软件更新
-     #- REPO_URL=https://ghproxy.com/https://github.com/NAStool/nas-tools.git  # 当你访问github网络很差时，可以考虑解释本行注释
+     #- REPO_URL=https://ghproxy.com/https://github.com/boeto/nas-tools.git  # 当你访问github网络很差时，可以考虑解释本行注释
     restart: always
     network_mode: bridge
     hostname: nas-tools
@@ -70,11 +70,17 @@ services:
 
 ## 后续如何更新
 
-- 正常情况下，如果设置了`NASTOOL_AUTO_UPDATE=true`，重启容器即可自动更新nas-tools程序。
+已关闭github自动检测更新，请使用docker pull 更新镜像
+
+```bash
+docker pull boeto/nas-tools
+```
+
+<!-- - 正常情况下，如果设置了`NASTOOL_AUTO_UPDATE=true`，重启容器即可自动更新nas-tools程序。
 
 - 设置了`NASTOOL_AUTO_UPDATE=true`时，如果启动时的日志提醒你 "更新失败，继续使用旧的程序来启动..."，请再重启一次，如果一直都报此错误，请改善你的网络。
 
-- 设置了`NASTOOL_AUTO_UPDATE=true`时，如果启动时的日志提醒你 "无法安装依赖，请更新镜像..."，则需要删除旧容器，删除旧镜像，重新pull镜像，再重新创建容器。
+- 设置了`NASTOOL_AUTO_UPDATE=true`时，如果启动时的日志提醒你 "无法安装依赖，请更新镜像..."，则需要删除旧容器，删除旧镜像，重新pull镜像，再重新创建容器。 -->
 
 ## 关于PUID/PGID的说明
 
