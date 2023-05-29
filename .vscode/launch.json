@@ -2,6 +2,21 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "Python: Flask",
+      "type": "python",
+      "request": "launch",
+      "module": "flask",
+      "env": {
+        "NASTOOL_CONFIG": "${workspaceFolder}/config-test/config.yaml",
+        "FLASK_APP": "${workspaceFolder}/run.py",
+        "FLASK_DEBUG": "1",
+        "FLASK_ENV": "development"
+      },
+      "args": ["run", "--port=3000", "--no-debugger", "--no-reload"],
+      "jinja": true,
+      "justMyCode": true
+    },
+    {
       "name": "Python: Current File",
       "type": "python",
       "request": "launch",

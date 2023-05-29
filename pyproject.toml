@@ -12,7 +12,7 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-dev-start = "my_module:main"
+# nt-run-test = "nt_run_test:main"
 
 [tool.poetry.group.dev.dependencies]
 flake8 = "^6.0.0"
