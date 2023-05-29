@@ -156,50 +156,53 @@ function __main {
 
     cd ${WORKDIR}
 
-    # 自动更新
     if [ "${NASTOOL_AUTO_UPDATE}" = "true" ]; then
-        if [ ! -s /tmp/requirements.txt.sha256sum ]; then
-            sha256sum requirements.txt >/tmp/requirements.txt.sha256sum
-        fi
-        if [ ! -s /tmp/third_party.txt.sha256sum ]; then
-            sha256sum third_party.txt >/tmp/third_party.txt.sha256sum
-        fi
-        if [ ! -s /tmp/package_list.txt.sha256sum ]; then
-            sha256sum package_list.txt >/tmp/package_list.txt.sha256sum
-        fi
-        echo "更新主程序..."
-        git remote set-url origin "${REPO_URL}" &>/dev/null
-        echo "windows/" >.gitignore
-        # 更新分支
-        if [[ "${NASTOOL_VERSION}" == "dev" ]]; then
-            branch="dev"
-        else
-            branch="master"
-        fi
-
-        git clean -dffx
-        git fetch --depth 1 origin ${branch}
-        git reset --hard origin/${branch}
-
-        if [ $? -eq 0 ]; then
-            echo "主程序更新成功"
-            # 服务脚本更新
-            compare "/nas-tools/docker/rootfs/etc" "/etc"
-            chmod -R +x \
-                /etc/cont-init.d \
-                /etc/services.d
-            # 系统软件包更新
-            package_update
-            # Python依赖包更新
-            requirements_update
-            # third_party 更新
-            third_party_update
-        else
-            echo "更新失败，继续使用旧的程序来启动..."
-        fi
-    else
-        echo "程序自动升级已关闭，如需自动升级请在创建容器时设置环境变量：NASTOOL_AUTO_UPDATE=true"
+        echo "程序自动升级已停用"
     fi
+    # 自动更新
+    # if [ "${NASTOOL_AUTO_UPDATE}" = "true" ]; then
+    #     if [ ! -s /tmp/requirements.txt.sha256sum ]; then
+    #         sha256sum requirements.txt >/tmp/requirements.txt.sha256sum
+    #     fi
+    #     if [ ! -s /tmp/third_party.txt.sha256sum ]; then
+    #         sha256sum third_party.txt >/tmp/third_party.txt.sha256sum
+    #     fi
+    #     if [ ! -s /tmp/package_list.txt.sha256sum ]; then
+    #         sha256sum package_list.txt >/tmp/package_list.txt.sha256sum
+    #     fi
+    #     echo "更新主程序..."
+    #     git remote set-url origin "${REPO_URL}" &>/dev/null
+    #     echo "windows/" >.gitignore
+    #     # 更新分支
+    #     if [[ "${NASTOOL_VERSION}" == "dev" ]]; then
+    #         branch="dev"
+    #     else
+    #         branch="master"
+    #     fi
+
+    #     git clean -dffx
+    #     git fetch --depth 1 origin ${branch}
+    #     git reset --hard origin/${branch}
+
+    #     if [ $? -eq 0 ]; then
+    #         echo "主程序更新成功"
+    #         # 服务脚本更新
+    #         compare "/nas-tools/docker/rootfs/etc" "/etc"
+    #         chmod -R +x \
+    #             /etc/cont-init.d \
+    #             /etc/services.d
+    #         # 系统软件包更新
+    #         package_update
+    #         # Python依赖包更新
+    #         requirements_update
+    #         # third_party 更新
+    #         third_party_update
+    #     else
+    #         echo "更新失败，继续使用旧的程序来启动..."
+    #     fi
+    # else
+    #     echo "程序自动升级已关闭，如需自动升级请在创建容器时设置环境变量：NASTOOL_AUTO_UPDATE=true"
+    # fi
 
 }
 

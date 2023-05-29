@@ -11,6 +11,7 @@ import sqlite3
 import time
 from math import floor
 from pathlib import Path
+from typing import Any, Dict, Union
 from urllib.parse import unquote
 
 import cn2an
@@ -78,8 +79,8 @@ from web.backend.web_utils import WebUtils
 
 
 class WebAction:
-    _actions = {}
-    _commands = {}
+    _actions: Dict[Any, Any] = {}
+    _commands: Dict[Any, Any] = {}
 
     def __init__(self):
         # WEB请求响应
@@ -757,7 +758,7 @@ class WebAction:
         开始下载
         """
         tid = data.get("id")
-        if id:
+        if tid:
             Downloader().start_torrents(ids=tid)
         return {"retcode": 0, "id": tid}
 
@@ -767,7 +768,7 @@ class WebAction:
         停止下载
         """
         tid = data.get("id")
-        if id:
+        if tid:
             Downloader().stop_torrents(ids=tid)
         return {"retcode": 0, "id": tid}
 
@@ -777,7 +778,7 @@ class WebAction:
         删除下载
         """
         tid = data.get("id")
-        if id:
+        if tid:
             Downloader().delete_torrents(ids=tid, delete_file=True)
         return {"retcode": 0, "id": tid}
 
@@ -1341,49 +1342,49 @@ class WebAction:
         """
         更新
         """
-        # 升级
-        if SystemUtils.is_synology():
-            if (
-                SystemUtils.execute(
-                    '/bin/ps -w -x | grep -v grep | grep -w "nastool update" |'
-                    " wc -l"
-                )
-                == "0"
-            ):
-                # 调用群晖套件内置命令升级
-                os.system("nastool update")
-                # 重启
-                self.restart_server()
-        else:
-            # 清除git代理
-            os.system("sudo git config --global --unset http.proxy")
-            os.system("sudo git config --global --unset https.proxy")
-            # 设置git代理
-            proxy = Config().get_proxies() or {}
-            http_proxy = proxy.get("http")
-            https_proxy = proxy.get("https")
-            if http_proxy or https_proxy:
-                os.system(
-                    "sudo git config --global http.proxy"
-                    f" {http_proxy or https_proxy}"
-                )
-                os.system(
-                    "sudo git config --global https.proxy"
-                    f" {https_proxy or http_proxy}"
-                )
-            # 清理
-            os.system("sudo git clean -dffx")
-            # 升级
-            branch = os.getenv("NASTOOL_VERSION", "master")
-            os.system(f"sudo git fetch --depth 1 origin {branch}")
-            os.system(f"sudo git reset --hard origin/{branch}")
-            os.system("sudo git submodule update --init --recursive")
-            # 安装依赖
-            os.system("sudo pip install -r /nas-tools/requirements.txt")
-            # 修复权限
-            os.system("sudo chown -R nt:nt /nas-tools")
-            # 重启
-            self.restart_server()
+        # #升级
+        # if SystemUtils.is_synology():
+        #     if (
+        #         SystemUtils.execute(
+        #             "/bin/ps -w -x | grep -v grep |                        "
+        #             ' grep -w "nastool update" | wc -l'
+        #         )
+        #         == "0"
+        #     ):
+        #         # 调用群晖套件内置命令升级
+        #         os.system("nastool update")
+        #         # 重启
+        #         self.restart_server()
+        # else:
+        #     # 清除git代理
+        #     os.system("sudo git config --global --unset http.proxy")
+        #     os.system("sudo git config --global --unset https.proxy")
+        #     # 设置git代理
+        #     proxy = Config().get_proxies() or {}
+        #     http_proxy = proxy.get("http")
+        #     https_proxy = proxy.get("https")
+        #     if http_proxy or https_proxy:
+        #         os.system(
+        #             "sudo git config --global http.proxy"
+        #             f" {http_proxy or https_proxy}"
+        #         )
+        #         os.system(
+        #             "sudo git config --global https.proxy"
+        #             f" {https_proxy or http_proxy}"
+        #         )
+        #     # 清理
+        #     os.system("sudo git clean -dffx")
+        #     # 升级
+        #     branch = os.getenv("NASTOOL_VERSION", "master")
+        #     os.system(f"sudo git fetch --depth 1 origin {branch}")
+        #     os.system(f"sudo git reset --hard origin/{branch}")
+        #     os.system("sudo git submodule update --init --recursive")
+        #     # 安装依赖
+        #     os.system("sudo pip install -r /nas-tools/requirements.txt")
+        #     # 修复权限
+        #     os.system("sudo chown -R nt:nt /nas-tools")
+        #     # 重启
+        #     self.restart_server()
         return {"code": 0}
 
     @staticmethod
@@ -1446,7 +1447,7 @@ class WebAction:
 
         # 源目录检查
         if not source:
-            return {"code": 1, "msg": f"源目录不能为空"}
+            return {"code": 1, "msg": "源目录不能为空"}
         if not os.path.exists(source):
             return {"code": 1, "msg": f"{source}目录不存在"}
         # windows目录用\，linux目录用/
@@ -1750,7 +1751,7 @@ class WebAction:
         rssid = data.get("rssid")
         seasons = []
         link_url = ""
-        vote_average = 0
+        vote_average = 0.0
         poster_path = ""
         release_date = ""
         overview = ""
@@ -2405,7 +2406,8 @@ class WebAction:
         if not data or "days" not in data or not isinstance(data["days"], int):
             return {"code": 1, "msg": "查询参数错误"}
 
-        resp = {"code": 0}
+        resp: Dict[str, Union[list[list[str]], int]] = {"code": 0}
+
         (
             _,
             _,
@@ -2437,7 +2439,7 @@ class WebAction:
         if not data or "name" not in data:
             return {"code": 1, "msg": "查询参数错误"}
 
-        resp = {"code": 0}
+        resp: Dict[str, Union[list[list[str]], int]] = {"code": 0}
 
         seeding_info = (
             SiteUserInfo()
@@ -2682,13 +2684,14 @@ class WebAction:
             return {"code": 0, "Items": []}
 
     @staticmethod
-    def parse_brush_rule_string(rules: dict):
+    def parse_brush_rule_string(rules: Dict[str, str]):
         if not rules:
             return ""
         rule_filter_string = {"gt": ">", "lt": "<", "bw": ""}
         rule_htmls = []
-        if rules.get("size"):
-            sizes = rules.get("size").split("#")
+        __size = rules.get("size")
+        if __size:
+            sizes = __size.split("#")
             if sizes[0]:
                 if sizes[1]:
                     sizes[1] = sizes[1].replace(",", "-")
@@ -2697,8 +2700,9 @@ class WebAction:
                     ' title="种子大小">种子大小: %s %sGB</span>'
                     % (rule_filter_string.get(sizes[0]), sizes[1])
                 )
-        if rules.get("pubdate"):
-            pubdates = rules.get("pubdate").split("#")
+        __pubdate = rules.get("pubdate")
+        if __pubdate:
+            pubdates = __pubdate.split("#")
             if pubdates[0]:
                 if pubdates[1]:
                     pubdates[1] = pubdates[1].replace(",", "-")
@@ -2707,17 +2711,19 @@ class WebAction:
                     ' title="发布时间">发布时间: %s %s小时</span>'
                     % (rule_filter_string.get(pubdates[0]), pubdates[1])
                 )
-        if rules.get("upspeed"):
+        __upspeed = rules.get("upspeed")
+        if __upspeed:
             rule_htmls.append(
                 '<span class="badge badge-outline text-blue me-1 mb-1"'
                 ' title="上传限速">上传限速: %sB/s</span>'
-                % StringUtils.str_filesize(int(rules.get("upspeed")) * 1024)
+                % StringUtils.str_filesize(int(__upspeed) * 1024)
             )
-        if rules.get("downspeed"):
+        __downspeed = rules.get("downspeed")
+        if __downspeed:
             rule_htmls.append(
                 '<span class="badge badge-outline text-blue me-1 mb-1"'
                 ' title="下载限速">下载限速: %sB/s</span>'
-                % StringUtils.str_filesize(int(rules.get("downspeed")) * 1024)
+                % StringUtils.str_filesize(int(__downspeed) * 1024)
             )
         if rules.get("include"):
             rule_htmls.append(
@@ -2743,20 +2749,27 @@ class WebAction:
                 % rules.get("dlcount")
             )
         if rules.get("peercount"):
-            peer_counts = None
+            peer_counts: Any = None
+            __peercount = rules.get("peercount")
             if rules.get("peercount") == "#":
                 peer_counts = None
-            elif "#" in rules.get("peercount"):
-                peer_counts = rules.get("peercount").split("#")
-                peer_counts[1] = (
-                    peer_counts[1].replace(",", "-")
-                    if (len(peer_counts) >= 2 and peer_counts[1])
-                    else peer_counts[1]
-                )
+            elif __peercount:
+                if "#" in __peercount:
+                    peer_counts = __peercount.split("#")
+                    peer_counts[1] = (
+                        peer_counts[1].replace(",", "-")
+                        if (len(peer_counts) >= 2 and peer_counts[1])
+                        else peer_counts[1]
+                    )
             else:
                 try:
                     # 兼容性代码
-                    peer_counts = ["lt", int(rules.get("peercount"))]
+                    __peercount = rules.get("peercount")
+                    if __peercount:
+                        peer_counts = [
+                            "lt",
+                            int(__peercount),
+                        ]
                 except Exception as err:
                     ExceptionUtils.exception_traceback(err)
                     pass
@@ -2766,40 +2779,45 @@ class WebAction:
                     ' title="当前做种人数限制">做种人数: %s %s</span>'
                     % (rule_filter_string.get(peer_counts[0]), peer_counts[1])
                 )
-        if rules.get("time"):
-            times = rules.get("time").split("#")
+        __time = rules.get("time")
+        if __time:
+            times = __time.split("#")
             if times[0]:
                 rule_htmls.append(
                     '<span class="badge badge-outline text-orange me-1 mb-1"'
                     ' title="做种时间">做种时间: %s %s小时</span>'
                     % (rule_filter_string.get(times[0]), times[1])
                 )
-        if rules.get("ratio"):
-            ratios = rules.get("ratio").split("#")
+        __ratio = rules.get("ratio")
+        if __ratio:
+            ratios = __ratio.split("#")
             if ratios[0]:
                 rule_htmls.append(
                     '<span class="badge badge-outline text-orange me-1 mb-1"'
                     ' title="分享率">分享率: %s %s</span>'
                     % (rule_filter_string.get(ratios[0]), ratios[1])
                 )
-        if rules.get("uploadsize"):
-            uploadsizes = rules.get("uploadsize").split("#")
+        __uploadsize = rules.get("uploadsize")
+        if __uploadsize:
+            uploadsizes = __uploadsize.split("#")
             if uploadsizes[0]:
                 rule_htmls.append(
                     '<span class="badge badge-outline text-orange me-1 mb-1"'
                     ' title="上传量">上传量: %s %sGB</span>'
                     % (rule_filter_string.get(uploadsizes[0]), uploadsizes[1])
                 )
-        if rules.get("dltime"):
-            dltimes = rules.get("dltime").split("#")
+        __dltime = rules.get("dltime")
+        if __dltime:
+            dltimes = __dltime.split("#")
             if dltimes[0]:
                 rule_htmls.append(
                     '<span class="badge badge-outline text-orange me-1 mb-1"'
                     ' title="下载耗时">下载耗时: %s %s小时</span>'
                     % (rule_filter_string.get(dltimes[0]), dltimes[1])
                 )
-        if rules.get("avg_upspeed"):
-            avg_upspeeds = rules.get("avg_upspeed").split("#")
+        __avg_upspeed = rules.get("avg_upspeed")
+        if __avg_upspeed:
+            avg_upspeeds = __avg_upspeed.split("#")
             if avg_upspeeds[0]:
                 rule_htmls.append(
                     '<span class="badge badge-outline text-orange me-1 mb-1"'
@@ -2809,8 +2827,9 @@ class WebAction:
                         avg_upspeeds[1],
                     )
                 )
-        if rules.get("iatime"):
-            iatimes = rules.get("iatime").split("#")
+        __iatime = rules.get("iatime")
+        if __iatime:
+            iatimes = __iatime.split("#")
             if iatimes[0]:
                 rule_htmls.append(
                     '<span class="badge badge-outline text-orange me-1 mb-1"'
@@ -3487,7 +3506,7 @@ class WebAction:
             else:
                 group_infos = _wordshelper.get_custom_word_groups()
                 word_infos = _wordshelper.get_custom_words()
-            export_dict = {}
+            export_dict: Dict[str, Any] = {}
             if not group_ids or "-1" in group_ids:
                 export_dict["-1"] = {
                     "id": -1,
@@ -3506,9 +3525,9 @@ class WebAction:
                     "words": {},
                 }
             for word_info in word_infos:
-                export_dict[str(word_info.GROUP_ID)]["words"][
-                    str(word_info.ID)
-                ] = {
+                __gid = str(word_info.GROUP_ID)
+                __wid = str(word_info.ID)
+                export_dict[__gid]["words"][__wid] = {
                     "id": word_info.ID,
                     "replaced": word_info.REPLACED,
                     "replace": word_info.REPLACE,
@@ -3786,8 +3805,8 @@ class WebAction:
         查询媒体库存储空间
         """
         # 磁盘空间
-        UsedSapce = 0
-        UsedPercent = 0
+        UsedSapce: Any = 0
+        UsedPercent: Any = 0
         media = Config().get_config("media")
         # 电影目录
         movie_paths = media.get("movie_path")
@@ -3903,7 +3922,7 @@ class WebAction:
         """
         查询所有搜索结果
         """
-        SearchResults = {}
+        SearchResults: Dict[str, Any] = {}
         res = Searcher().get_search_results()
         total = len(res)
         for item in res:
@@ -3934,7 +3953,10 @@ class WebAction:
             unique_key = re.sub(
                 r"[-.\s@|]",
                 "",
-                f"{respix}_{restype}_{video_encode}_{reseffect}_{item.SIZE}_{item.OTHERINFO}",
+                (
+                    f"{respix}_{restype}_{video_encode}_{reseffect}_"
+                    f"{item.SIZE}_{item.OTHERINFO}"
+                ),
             ).lower()
             # 标识信息
             unique_info = {
@@ -3984,7 +4006,8 @@ class WebAction:
             # 促销
             free_item = {
                 "value": (
-                    f"{item.UPLOAD_VOLUME_FACTOR} {item.DOWNLOAD_VOLUME_FACTOR}"
+                    f"{item.UPLOAD_VOLUME_FACTOR}"
+                    f" {item.DOWNLOAD_VOLUME_FACTOR}"
                 ),
                 "name": MetaBase.get_free_string(
                     item.UPLOAD_VOLUME_FACTOR, item.DOWNLOAD_VOLUME_FACTOR
@@ -4046,20 +4069,30 @@ class WebAction:
                     }
                 # 过滤条件
                 torrent_filter = dict(result_item.get("filter"))
-                if free_item not in torrent_filter.get("free"):
-                    torrent_filter["free"].append(free_item)
-                if releasegroup not in torrent_filter.get("releasegroup"):
-                    torrent_filter["releasegroup"].append(releasegroup)
-                if item.SITE not in torrent_filter.get("site"):
-                    torrent_filter["site"].append(item.SITE)
-                if video_encode and video_encode not in torrent_filter.get(
-                    "video"
-                ):
-                    torrent_filter["video"].append(video_encode)
-                if filter_season and filter_season not in torrent_filter.get(
-                    "season"
-                ):
-                    torrent_filter["season"].append(filter_season)
+                __free = torrent_filter.get("free")
+                if __free:
+                    if free_item not in __free:
+                        torrent_filter["free"].append(free_item)
+
+                __releasegroup = torrent_filter.get("releasegroup")
+                if __releasegroup:
+                    if releasegroup not in __releasegroup:
+                        torrent_filter["releasegroup"].append(releasegroup)
+
+                __site = torrent_filter.get("site")
+                if __site:
+                    if item.SITE not in __site:
+                        torrent_filter["site"].append(item.SITE)
+
+                __video = torrent_filter.get("video")
+                if __video:
+                    if video_encode and video_encode not in __video:
+                        torrent_filter["video"].append(video_encode)
+
+                __season = torrent_filter.get("season")
+                if __season:
+                    if filter_season and filter_season not in __season:
+                        torrent_filter["season"].append(filter_season)
             else:
                 fav, rssid = 0, None
                 # 存在标志
@@ -4453,7 +4486,7 @@ class WebAction:
             Init_RuleGroups = []
             i = 0
             while i < len(sql_list):
-                rulegroup = {}
+                rulegroup: Dict[str, Any] = {}
                 rulegroup_info = re.findall(
                     r"[0-9]+,'[^\"]+NULL", sql_list[i], re.I
                 )[0].split(",")
