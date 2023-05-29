@@ -9,8 +9,7 @@
       "env": {
         "NASTOOL_CONFIG": "${workspaceFolder}/config-test/config.yaml",
         "FLASK_APP": "${workspaceFolder}/run.py",
-        "FLASK_DEBUG": "1",
-        "FLASK_ENV": "development"
+        "FLASK_DEBUG": "1"
       },
       "args": ["run", "--port=3000", "--no-debugger", "--no-reload"],
       "jinja": true,

@@ -42,10 +42,11 @@ docker pull boeto/nas-tools:latest
 python3.10版本，需要预安装cython，如发现缺少依赖包需额外安装：
 
 ```bash
-git clone -b master https://github.com/boeto/nas-tools --recurse-submodule 
+git clone -b master https://github.com/boeto/nas-tools --recurse-submodule
+cd nas-tools
 python3 -m pip install -r requirements.txt
 export NASTOOL_CONFIG="/xxx/config/config.yaml"
-nohup python3 run.py & 
+nohup python3 run.py &
 ```
 
 ## 开发
@@ -57,14 +58,20 @@ nohup python3 run.py &
 * 安装依赖和开发套件
 
 ```bash
-poetry install &&
-poetry run pre-commit install --install-hooks && \
+git clone --single-branch -b dev https://github.com/boeto/nas-tools --recurse-submodule
+cd nas-tools
+poetry install
+poetry run pre-commit install --install-hooks
 poetry run pre-commit autoupdate
 ```
 
 * 运行程序
 
 ```bash
+tee .env <<EOF
+NASTOOL_CONFIG=config-dev/config.yaml
+FLASK_DEBUG=1
+EOF
 poetry run python3 run.py
 ```
 
