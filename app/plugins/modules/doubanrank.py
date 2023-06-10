@@ -792,7 +792,7 @@ ajax_post(
             else:
                 self.info(
                     f"{media_info.get_title_string()}"
-                    f" {media_info.get_season_string()}加 添订阅成功"
+                    f" {media_info.get_season_string()} 添加订阅成功"
                 )
                 self.__update_history(
                     douban_title,
