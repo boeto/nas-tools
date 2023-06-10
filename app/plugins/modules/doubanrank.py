@@ -653,19 +653,29 @@ ajax_post(
                         continue
 
                     # 如果是剧集且开启全季订阅，则轮流下载每一季
-                    if media_info.tmdb_info:
-                        if (
-                            media_info.tmdb_info["media_type"] == MediaType.TV
-                        ) and self._is_seasons_all:
-                            seasons = Media().get_tmdb_tv_seasons(
-                                media_info.tmdb_info
+                    if (
+                        media_info.tmdb_info
+                        and media_info.tmdb_info["media_type"] == MediaType.TV
+                        and self._is_seasons_all
+                    ):
+                        seasons = Media().get_tmdb_tv_seasons(
+                            media_info.tmdb_info
+                        )
+                        for season in seasons:
+                            self.info(
+                                "开始尝试添加订阅："
+                                f"{media_info.get_title_string()}"
+                                f" 第{season.get('season_number')}季"
                             )
-                            for season in seasons:
-                                media_info.begin_season = season.get(
-                                    "season_number"
-                                )
-                                self.add_rss(media_info, douban_title)
+                            media_info.begin_season = season.get(
+                                "season_number"
+                            )
+                            self.add_rss(media_info, douban_title)
                     else:
+                        self.info(
+                            "开始尝试添加订阅："
+                            f" {media_info.get_title_string()}"
+                        )
                         self.add_rss(media_info, douban_title)
 
                     # RSS_TORRENTS 添加处理历史
@@ -782,7 +792,7 @@ ajax_post(
             else:
                 self.info(
                     f"{media_info.get_title_string()}"
-                    f" {media_info.get_season_string()} 添加订阅成功"
+                    f" {media_info.get_season_string()}加 添订阅成功"
                 )
                 self.__update_history(
                     douban_title,
