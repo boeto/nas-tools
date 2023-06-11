@@ -276,17 +276,17 @@ class DoubanRank(_IPluginModule):
                             "required": "",
                             "tooltip": (
                                 "每一行一个RSS地址，访问"
-                                " https://docs.rsshub.app/social-media."
-                                "html#dou-ban"
-                                " 查询可用地址"
+                                " https://docs.rsshub.app/social-media.html"
+                                "#dou-ban 查询可用地址。RSS地址后再接分号 `;` "
+                                "可额外自定义该RSS地址的保存路径。"
                             ),
                             "type": "textarea",
                             "content": {
                                 "id": "rss_addrs",
                                 "placeholder": (
                                     "https://rsshub.app/douban/"
-                                    "movie/classification/"
-                                    ":sort?/:score?/:tags?"
+                                    "movie/classification/:sort?/:score?"
+                                    "/:tags?;/customize_save_path"
                                 ),
                                 "rows": 5,
                             },
@@ -579,6 +579,7 @@ ajax_post(
         刷新RSS
         """
         self.info("开始刷新RSS ...")
+        customize_save_path: Optional[str] = None
         addr_list = self._rss_addrs + [
             self._douban_address.get(rank) for rank in self._ranks
         ]
@@ -592,6 +593,21 @@ ajax_post(
                 continue
             try:
                 self.info(f"获取RSS：{addr} ...")
+
+                # 提取分号分割的链接和保存地址
+                if ";" in addr:
+                    split_str = addr.split(";")
+                    str_list = []
+                    for item in split_str:
+                        if item.strip():
+                            str_list.append(item.strip())
+                    addr = str_list[0]
+                    customize_save_path = str_list[1]
+                    self.info(
+                        f"订阅链接 {addr} 的自定义保存路径为:"
+                        f" {customize_save_path}"
+                    )
+
                 rss_infos = self.get_rss_info(addr)
                 if not rss_infos:
                     self.error(f"RSS地址：{addr} ，未查询到数据")
@@ -670,13 +686,17 @@ ajax_post(
                             media_info.begin_season = season.get(
                                 "season_number"
                             )
-                            self.add_rss(media_info, douban_title)
+                            self.add_rss(
+                                media_info, douban_title, customize_save_path
+                            )
                     else:
                         self.info(
                             "开始尝试添加订阅："
                             f" {media_info.get_title_string()}"
                         )
-                        self.add_rss(media_info, douban_title)
+                        self.add_rss(
+                            media_info, douban_title, customize_save_path
+                        )
 
                     # RSS_TORRENTS 添加处理历史
                     if self.rsshelper:
@@ -731,7 +751,12 @@ ajax_post(
             return []
 
     # 检查并添加订阅
-    def add_rss(self, media_info, douban_title: str):
+    def add_rss(
+        self,
+        media_info,
+        douban_title: str,
+        customize_save_path: Optional[str] = None,
+    ):
         # 检查媒体服务器是否存在
         if self.mediaserver:
             item_id = self.mediaserver.check_item_exists(
@@ -777,6 +802,7 @@ ajax_post(
                 season=media_info.begin_season,
                 channel=RssType.Auto,
                 in_from=SearchType.PLUGIN,
+                save_path=customize_save_path,
             )
             if not rss_media or code != 0:
                 self.warn(
