@@ -693,7 +693,7 @@ ajax_post(
         获取RSS
         """
         try:
-            ret = RequestUtils().get_res(addr)
+            ret = RequestUtils(timeout=300).get_res(addr)
             if not ret:
                 return []
             ret.encoding = ret.apparent_encoding
