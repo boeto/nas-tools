@@ -1165,6 +1165,20 @@ function show_default_rss_setting_modal(mtype) {
       } else {
         select_SelectPart(ret.data.search_sites, "default_search_sites");
       }
+
+      refresh_savepath_select(
+        "default_rss_setting_save_path",
+        false,
+        ret.data.download_setting
+      );
+
+      if (ret.data.save_path_manual) {
+        check_manual_input_path(
+          "default_rss_setting_save_path",
+          "default_rss_setting_save_path_manual",
+          ret.data.save_path_manual
+        );
+      }
     } else {
       $("#default_rss_setting_restype").val("");
       $("#default_rss_setting_pix").val("");
@@ -1173,10 +1187,13 @@ function show_default_rss_setting_modal(mtype) {
       $("#default_rss_setting_include").val("");
       $("#default_rss_setting_exclude").val("");
       $("#default_rss_setting_download_setting").val("");
+      $("#default_rss_setting_save_path").val("");
+      $("#default_rss_setting_save_path_manual").val("");
       $("#default_rss_setting_over_edition").val("0");
       select_SelectALL(false, "default_rss_sites");
       select_SelectALL(false, "default_search_sites");
     }
+
     $("#default_rss_setting_mtype").val(mtype);
     $("#modal-default-rss-setting").modal("show");
   });
