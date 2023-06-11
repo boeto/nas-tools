@@ -163,6 +163,10 @@ class Subscribe:
                 default_save_path_manual = default_rss_setting.get(
                     "save_path_manual"
                 )
+
+                if not save_path and default_save_path_manual:
+                    save_path = default_save_path_manual
+
                 if not filter_restype and default_restype:
                     filter_restype = default_restype
                 if not filter_pix and default_pix:
@@ -193,8 +197,6 @@ class Subscribe:
                     rss_sites = default_rss_sites
                 if not search_sites and default_search_sites:
                     search_sites = default_search_sites
-                if not save_path and default_save_path_manual:
-                    save_path = default_save_path_manual
         # 搜索媒体信息
         if not fuzzy_match:
             # 根据TMDBID查询，从推荐加订阅的情况
