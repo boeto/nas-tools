@@ -521,12 +521,6 @@
           </div>
           <div class="col-lg">
             <div class="mb-3">
-              <label class="form-label">下载设置</label>
-              <select class="form-select" id="default_rss_setting_download_setting"></select>
-            </div>
-          </div>
-          <div class="col-lg">
-            <div class="mb-3">
               <label class="form-label">洗版 </label>
               <select class="form-select" id="default_rss_setting_over_edition">
                 <option value="0" selected>否</option>
@@ -535,6 +529,27 @@
             </div>
           </div>
         </div>
+
+        <div class="row">
+
+          <div class="col-lg">
+            <div class="mb-3">
+              <label class="form-label">下载设置</label>
+              <select class="form-select" id="default_rss_setting_download_setting"></select>
+            </div>
+          </div>
+
+          <div class="col-lg">
+            <div class="mb-3">
+              <label class="form-label">保存路径</label>
+              <select class="form-select" id="default_rss_setting_save_path" aria-label="保存目录" onchange="check_manual_input_path('default_rss_setting_save_path','default_rss_setting_save_path_manual')">
+              </select>
+              <input type="text" value="" id="default_rss_setting_save_path_manual" class="form-control" style="display: none" placeholder="留空自动选择保存路径">
+            </div>
+          </div>
+
+        </div>
+
         <div class="row rss_sites_container" id="default_rss_setting_rss_sites_div">
           <div class="mb-3">
               <div class="btn-list">
