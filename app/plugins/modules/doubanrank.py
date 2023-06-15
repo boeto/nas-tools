@@ -1,5 +1,5 @@
 import re
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 import xml.dom.minidom
 from datetime import datetime, timedelta
 from threading import Event
@@ -8,6 +8,8 @@ import pytz  # type: ignore
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from jinja2 import Template
+
+from app.downloader.downloader import Downloader
 
 from app.helper import RssHelper
 from app.media import Media
@@ -75,10 +77,10 @@ class DoubanRank(_IPluginModule):
     _is_seasons_all = True
     _is_delete_history_all = False
     _cron = ""
-    _rss_addrs: list[str] = []
-    _ranks: list[str] = []
     _vote = 0.0
     _scheduler = None
+
+    _rss_download_addrs: dict[str, list[str]] = {}
 
     def init_config(self, config: Optional[Dict[str, Any]] = None):
         self.mediaserver = MediaServer()
@@ -98,101 +100,147 @@ class DoubanRank(_IPluginModule):
             self._vote = (
                 float(config.get("vote", 3.14)) if config.get("vote") else 0.0
             )
-            rss_addrs = config.get("rss_addrs")
-            if rss_addrs:
-                if isinstance(rss_addrs, str):
-                    self._rss_addrs = rss_addrs.split("\n")
-                else:
-                    self._rss_addrs = rss_addrs
-            else:
-                self._rss_addrs = []
-            self._ranks = config.get("ranks") or []
+
+            rss_download_settings = config.get(
+                "rss_download_setting", Optional[List[str]]
+            )
+            if rss_download_settings:
+                for download_setting in rss_download_settings:
+                    setting_rss_addrs = config.get(
+                        f"rss_addrs_{download_setting}"
+                    )
+                    if setting_rss_addrs:
+                        if isinstance(setting_rss_addrs, str):
+                            _setting_rss_addrs = setting_rss_addrs.split("\n")
+                        else:
+                            self.info("订阅列表不是字符串，跳过。")
+
+                        if _setting_rss_addrs:
+                            self._rss_download_addrs[download_setting] = (
+                                _setting_rss_addrs
+                            )
+
+            ranks = config.get("ranks", [])
+            if ranks:
+                for rank in ranks:
+                    douban_address = self._douban_address.get(rank)
+                    if douban_address is not None:
+                        if (
+                            self._rss_download_addrs
+                            and self._rss_download_addrs[download_setting]
+                        ):
+                            self._rss_download_addrs["-1"].append(
+                                douban_address
+                            )
+                        else:
+                            self._rss_download_addrs["-1"] = [douban_address]
 
             self.debug(f"DoubanRank config: {config}")
+            self.debug(f"rss_download_addrs: {self._rss_download_addrs}")
 
-        # 停止现有任务
-        self.stop_service()
+            # 停止现有任务
+            self.stop_service()
 
-        # 启动服务
-        if self.get_state() or self._onlyonce or self._is_delete_history_all:
-            self._scheduler = BackgroundScheduler(
-                timezone=Config().get_timezone()
-            )
-
-            if self._scheduler:
-                __tz = Config().get_timezone()
-                if __tz:
-                    time_now = datetime.now(tz=pytz.timezone(__tz))
-                else:
-                    time_now = datetime.now()
-
-                if self._cron:
-                    self.info(f"订阅服务启动，周期：{self._cron}")
-                    self._scheduler.add_job(
-                        self.refresh_rss, CronTrigger.from_crontab(self._cron)
-                    )
-
-                # 删除全部订阅历史和缓存记录
-                if self._is_delete_history_all:
-                    self._scheduler.add_job(
-                        func=self.delete_rank_history_all,
-                        args="",
-                        trigger="date",
-                        run_date=time_now + timedelta(seconds=3),
-                    )
-
-                    # 关闭删除开关
-                    self._is_delete_history_all = False
-                    self.update_config(
-                        {
-                            "enable": self._enable,
-                            "is_seasons_all": self._is_seasons_all,
-                            "is_delete_history_all": False,
-                            "onlyonce": self._onlyonce,
-                            "cron": self._cron,
-                            "ranks": self._ranks,
-                            "vote": self._vote,
-                            "rss_addrs": "\n".join(self._rss_addrs),
-                        }
-                    )
-
-                if self._onlyonce:
-                    self.info("订阅服务启动，立即运行一次")
-                    self._scheduler.add_job(
-                        self.refresh_rss,
-                        "date",
-                        run_date=time_now + timedelta(seconds=3),
-                    )
-                    # 关闭一次性开关
-                    self._onlyonce = False
-                    self.update_config(
-                        {
-                            "enable": self._enable,
-                            "is_seasons_all": self._is_seasons_all,
-                            "is_delete_history_all": (
-                                self._is_delete_history_all
-                            ),
-                            "onlyonce": False,
-                            "cron": self._cron,
-                            "ranks": self._ranks,
-                            "vote": self._vote,
-                            "rss_addrs": "\n".join(self._rss_addrs),
-                        }
-                    )
-                if self._scheduler.get_jobs():
-                    # 启动服务
-                    self._scheduler.print_jobs()
-                    self._scheduler.start()
-            else:
-                self.error(
-                    f"订阅服务启动失败:self._scheduler={self._scheduler}"
+            # 启动服务
+            if (
+                self.get_state()
+                or self._onlyonce
+                or self._is_delete_history_all
+            ):
+                self._scheduler = BackgroundScheduler(
+                    timezone=Config().get_timezone()
                 )
 
+                if self._scheduler:
+                    __tz = Config().get_timezone()
+                    if __tz:
+                        time_now = datetime.now(tz=pytz.timezone(__tz))
+                    else:
+                        time_now = datetime.now()
+
+                    if self._cron:
+                        self.info(f"订阅服务启动，周期：{self._cron}")
+                        self._scheduler.add_job(
+                            self.refresh_rss,
+                            CronTrigger.from_crontab(self._cron),
+                        )
+
+                    # 删除全部订阅历史和缓存记录
+                    if self._is_delete_history_all:
+                        self._scheduler.add_job(
+                            func=self.delete_rank_history_all,
+                            args="",
+                            trigger="date",
+                            run_date=time_now + timedelta(seconds=3),
+                        )
+
+                        # 关闭删除开关
+                        self._is_delete_history_all = False
+                        config["is_delete_history_all"] = False
+                        self.update_config(config)
+                    if self._onlyonce:
+                        self.info("订阅服务启动，立即运行一次")
+                        self._scheduler.add_job(
+                            self.refresh_rss,
+                            "date",
+                            run_date=time_now + timedelta(seconds=3),
+                        )
+                        # 关闭一次性开关
+                        self._onlyonce = False
+                        config["onlyonce"] = False
+                        self.update_config(config)
+                    if self._scheduler.get_jobs():
+                        # 启动服务
+                        self._scheduler.print_jobs()
+                        self._scheduler.start()
+                else:
+                    self.error(
+                        f"订阅服务启动失败:self._scheduler={self._scheduler}"
+                    )
+
     def get_state(self):
-        return self._enable and self._cron and (self._ranks or self._rss_addrs)
+        return self._enable and self._cron and self._rss_download_addrs
 
     @staticmethod
     def get_fields():
+        download_setting_items = Downloader().get_download_setting().items()
+        rss_download_settings: Dict[str, Any] = {}
+
+        rss_download_content: list[Any] = [
+            # 同一行
+            [
+                {
+                    "id": "rss_download_setting",
+                    "type": "form-selectgroup",
+                    # "onclick": "rss_download_setting_check(this);",
+                    "content": rss_download_settings,
+                },
+            ],
+        ]
+
+        for key, value in download_setting_items:
+            rss_download_settings[key] = value
+            rss_addrs_id = f"rss_addrs_{key}"
+            rss_title = (f"订阅列表 - {value['name']}",)
+            rssAddr = (
+                {
+                    "title": rss_title,
+                    "required": "",
+                    "type": "textarea",
+                    "content": {
+                        "id": rss_addrs_id,
+                        "placeholder": (
+                            "https://rsshub.app/douban/"
+                            "movie/classification/:sort?/:score?/"
+                            ":tags?;/customize_save_path"
+                        ),
+                        "rows": 3,
+                    },
+                },
+            )
+
+            rss_download_content.append(rssAddr)
+
         return [
             # 同一板块
             {
@@ -270,35 +318,26 @@ class DoubanRank(_IPluginModule):
                             ],
                         },
                     ],
-                    [
-                        {
-                            "title": "RssHub订阅地址",
-                            "required": "",
-                            "tooltip": (
-                                "每一行一个RSS地址，访问"
-                                " https://docs.rsshub.app/social-media.html"
-                                "#dou-ban 查询可用地址。RSS地址后再接分号 `;` "
-                                "可额外自定义该RSS地址的保存路径。"
-                            ),
-                            "type": "textarea",
-                            "content": {
-                                "id": "rss_addrs",
-                                "placeholder": (
-                                    "https://rsshub.app/douban/"
-                                    "movie/classification/:sort?/:score?"
-                                    "/:tags?;/customize_save_path"
-                                ),
-                                "rows": 5,
-                            },
-                        }
-                    ],
                 ],
             },
             {
                 "type": "details",
-                "summary": "热门榜单",
+                "summary": "自定义订阅下载",
+                "required": "",
                 "tooltip": (
-                    "内建支持的豆瓣榜单，使用https://rsshub.app数据源，可直接选择订阅"
+                    "每个订阅列表对应一个下载设置。订阅列表每一行一个RSSHUB订阅地址，"
+                    "访问https://docs.rsshub.app/social-media.html"
+                    "#dou-ban 查询可用地址。订阅地址后再接分号 `;` "
+                    "可再自定义该订阅地址的保存路径。"
+                ),
+                "content": rss_download_content,
+            },
+            {
+                "type": "details",
+                "summary": "默认订阅下载",
+                "tooltip": (
+                    "内建支持的豆瓣榜单，使用默认下载设置和"
+                    "https://rsshub.app数据源，可直接选择订阅"
                 ),
                 "content": [
                     # 同一行
@@ -458,6 +497,7 @@ class DoubanRank(_IPluginModule):
         删除删除豆瓣的订阅历史和订阅处理记录的JS脚本
         """
         return """
+
 function DoubanRank_delete_history(id, name, year, douban_id, douban_title) {
 ajax_post(
     "run_plugin_method",
@@ -579,133 +619,158 @@ ajax_post(
         刷新RSS
         """
         self.info("开始刷新RSS ...")
-        customize_save_path: Optional[str] = None
-        addr_list = self._rss_addrs + [
-            self._douban_address.get(rank) for rank in self._ranks
-        ]
-        if not addr_list:
-            self.info("未设置RSS地址")
-            return
-        else:
-            self.info(f"共 {len(addr_list)} 个RSS地址需要刷新")
-        for addr in addr_list:
-            if not addr:
-                continue
-            try:
-                self.info(f"获取RSS：{addr} ...")
 
-                # 提取分号分割的链接和保存地址
-                if ";" in addr:
-                    split_str = addr.split(";")
-                    str_list = []
-                    for item in split_str:
-                        if item.strip():
-                            str_list.append(item.strip())
-                    addr = str_list[0]
-                    customize_save_path = str_list[1]
+        if self._rss_download_addrs:
+            for (
+                download_setting,
+                rss_addrs,
+            ) in self._rss_download_addrs.items():
+                if not rss_addrs:
                     self.info(
-                        f"订阅链接 {addr} 的自定义保存路径为:"
-                        f" {customize_save_path}"
+                        f"下载设置 {download_setting} 的订阅列表为空，跳过"
                     )
-
-                rss_infos = self.get_rss_info(addr)
-                if not rss_infos:
-                    self.error(f"RSS地址：{addr} ，未查询到数据")
                     continue
+
                 else:
-                    self.info(f"RSS地址：{addr} ，共 {len(rss_infos)} 条数据")
-
-                for rss_info in rss_infos:
-                    if self._event.is_set():
-                        self.info("订阅服务停止")
-                        return
-
-                    douban_title = rss_info.get("title")
-                    douban_id = rss_info.get("doubanid")
-                    mtype = rss_info.get("type")
-                    unique_flag_name = self.set_unique_flag(
-                        douban_title, douban_id
+                    self.info(
+                        f"下载设置 {download_setting} 的订阅列表：{rss_addrs}"
                     )
 
-                    # 检查是否已处理过
-                    if self.rsshelper:
-                        if self.rsshelper.is_rssd_by_simple(
-                            torrent_name=unique_flag_name, enclosure=None
-                        ):
-                            self.info(
-                                f"已处理过：{douban_title} （豆瓣id：{douban_id}）"
-                            )
+                    for addr in rss_addrs:
+                        if not addr:
                             continue
+                        try:
+                            self.info(f"获取RSS：{addr} ...")
 
-                    media_info = None
+                            customize_save_path = None
+                            # 提取分号分割的链接和保存地址
+                            if ";" in addr:
+                                split_str = addr.split(";")
+                                str_list: List[str] = []
+                                for item in split_str:
+                                    if item.strip():
+                                        str_list.append(item.strip())
+                                addr = str_list[0]
+                                customize_save_path = str_list[1]
+                                self.info(
+                                    f"订阅链接 {addr} 的自定义保存路径为:"
+                                    f" {customize_save_path}"
+                                )
 
-                    # 识别媒体信息
-                    if douban_id:
-                        media_info = WebUtils.get_mediainfo_from_id(
-                            mtype=mtype, mediaid=f"DB:{douban_id}", wait=True
-                        )
-                    else:
-                        if self.media:
-                            media_info = self.media.get_media_info(
-                                title=douban_title, mtype=mtype
-                            )
+                            rss_infos = self.get_rss_info(addr)
+                            if not rss_infos:
+                                self.error(f"RSS地址：{addr} ，未查询到数据")
+                                continue
+                            else:
+                                self.info(
+                                    f"RSS地址：{addr} ，共 {len(rss_infos)} 条数据"
+                                )
 
-                    if not media_info:
-                        self.warn(
-                            f"未查询到媒体信息：{douban_title} （豆瓣id：{douban_id}）"
-                        )
-                        continue
+                            for rss_info in rss_infos:
+                                if self._event.is_set():
+                                    self.info("订阅服务停止")
+                                    return
 
-                    if (
-                        self._vote
-                        and media_info.vote_average
-                        and media_info.vote_average < self._vote
-                    ):
-                        self.info(
-                            f"{media_info.get_title_string()} 评分"
-                            f" {media_info.vote_average} 低于限制"
-                            f" {self._vote}，跳过 ．．．"
-                        )
-                        continue
+                                douban_title = rss_info.get("title")
+                                douban_id = rss_info.get("doubanid")
+                                mtype = rss_info.get("type")
+                                unique_flag_name = self.set_unique_flag(
+                                    douban_title, douban_id
+                                )
 
-                    # 如果是剧集且开启全季订阅，则轮流下载每一季
-                    if (
-                        media_info.tmdb_info
-                        and media_info.tmdb_info["media_type"] == MediaType.TV
-                        and self._is_seasons_all
-                    ):
-                        seasons = Media().get_tmdb_tv_seasons(
-                            media_info.tmdb_info
-                        )
-                        for season in seasons:
-                            self.info(
-                                "开始尝试添加订阅："
-                                f"{media_info.get_title_string()}"
-                                f" 第{season.get('season_number')}季"
-                            )
-                            media_info.begin_season = season.get(
-                                "season_number"
-                            )
-                            self.add_rss(
-                                media_info, douban_title, customize_save_path
-                            )
-                    else:
-                        self.info(
-                            "开始尝试添加订阅："
-                            f" {media_info.get_title_string()}"
-                        )
-                        self.add_rss(
-                            media_info, douban_title, customize_save_path
-                        )
+                                # 检查是否已处理过
+                                if self.rsshelper:
+                                    if self.rsshelper.is_rssd_by_simple(
+                                        torrent_name=unique_flag_name,
+                                        enclosure=None,
+                                    ):
+                                        self.info(
+                                            f"已处理过：{douban_title}"
+                                            "（豆瓣id：{douban_id}）"
+                                        )
+                                        continue
 
-                    # RSS_TORRENTS 添加处理历史
-                    if self.rsshelper:
-                        self.rsshelper.simple_insert_rss_torrents(
-                            title=unique_flag_name, enclosure=None
-                        )
+                                media_info = None
 
-            except Exception as e:
-                self.error(f"RSS刷新错误: {str(e)}")
+                                # 识别媒体信息
+                                if douban_id:
+                                    media_info = (
+                                        WebUtils.get_mediainfo_from_id(
+                                            mtype=mtype,
+                                            mediaid=f"DB:{douban_id}",
+                                            wait=True,
+                                        )
+                                    )
+                                else:
+                                    if self.media:
+                                        media_info = self.media.get_media_info(
+                                            title=douban_title, mtype=mtype
+                                        )
+
+                                if not media_info:
+                                    self.warn(
+                                        f"未查询到媒体信息：{douban_title}"
+                                        "（豆瓣id：{douban_id}）"
+                                    )
+                                    continue
+
+                                if (
+                                    self._vote
+                                    and media_info.vote_average
+                                    and media_info.vote_average < self._vote
+                                ):
+                                    self.info(
+                                        f"{media_info.get_title_string()} 评分"
+                                        f" {media_info.vote_average} 低于限制"
+                                        f" {self._vote}，跳过 ．．．"
+                                    )
+                                    continue
+
+                                # 如果是剧集且开启全季订阅，则轮流下载每一季
+                                if (
+                                    media_info.tmdb_info
+                                    and media_info.tmdb_info["media_type"]
+                                    == MediaType.TV
+                                    and self._is_seasons_all
+                                ):
+                                    seasons = Media().get_tmdb_tv_seasons(
+                                        media_info.tmdb_info
+                                    )
+                                    for season in seasons:
+                                        self.info(
+                                            "开始尝试添加订阅："
+                                            f"{media_info.get_title_string()}"
+                                            f" 第{season.get('season_number')}季"
+                                        )
+                                        media_info.begin_season = season.get(
+                                            "season_number"
+                                        )
+                                        self.add_rss(
+                                            media_info,
+                                            douban_title,
+                                            download_setting,
+                                            customize_save_path,
+                                        )
+                                else:
+                                    self.info(
+                                        "开始尝试添加订阅："
+                                        f" {media_info.get_title_string()}"
+                                    )
+                                    self.add_rss(
+                                        media_info,
+                                        douban_title,
+                                        download_setting,
+                                        customize_save_path,
+                                    )
+
+                                # RSS_TORRENTS 添加处理历史
+                                if self.rsshelper:
+                                    self.rsshelper.simple_insert_rss_torrents(
+                                        title=unique_flag_name, enclosure=None
+                                    )
+
+                        except Exception as e:
+                            self.error(f"RSS刷新错误: {str(e)}")
         self.info("所有RSS刷新完成")
 
     def get_rss_info(self, addr):
@@ -755,6 +820,7 @@ ajax_post(
         self,
         media_info,
         douban_title: str,
+        download_setting: str,
         customize_save_path: Optional[str] = None,
     ):
         # 检查媒体服务器是否存在
@@ -803,6 +869,7 @@ ajax_post(
                 channel=RssType.Auto,
                 in_from=SearchType.PLUGIN,
                 save_path=customize_save_path,
+                download_setting=download_setting,
             )
             if not rss_media or code != 0:
                 self.warn(

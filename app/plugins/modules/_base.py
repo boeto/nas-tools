@@ -1,6 +1,7 @@
 import json
 import os
 from abc import ABCMeta, abstractmethod
+from typing import Any, Dict, Optional
 
 import log
 from app.conf import SystemConfig
@@ -72,7 +73,7 @@ class _IPluginModule(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def init_config(self, config: dict = None):
+    def init_config(self, config: Optional[Dict[str, Any]] = None):
         """
         生效配置信息
         :param config: 配置信息字典
@@ -93,7 +94,9 @@ class _IPluginModule(metaclass=ABCMeta):
         else:
             return str(obj).startswith("{") or str(obj).startswith("[")
 
-    def update_config(self, config: dict, plugin_id=None):
+    def update_config(
+        self, config: Dict[str, Any], plugin_id: Optional[str] = None
+    ):
         """
         更新配置信息
         :param config: 配置信息字典
@@ -103,7 +106,7 @@ class _IPluginModule(metaclass=ABCMeta):
             plugin_id = self.__class__.__name__
         return SystemConfig().set("plugin.%s" % plugin_id, config)
 
-    def get_config(self, plugin_id=None):
+    def get_config(self, plugin_id: Optional[str] = None):
         """
         获取配置信息
         :param plugin_id: 插件ID
@@ -112,7 +115,7 @@ class _IPluginModule(metaclass=ABCMeta):
             plugin_id = self.__class__.__name__
         return SystemConfig().get("plugin.%s" % plugin_id)
 
-    def get_data_path(self, plugin_id=None):
+    def get_data_path(self, plugin_id: Optional[str] = None):
         """
         获取插件数据保存目录
         """
@@ -135,7 +138,7 @@ class _IPluginModule(metaclass=ABCMeta):
             plugin_id=self.__class__.__name__, key=key, value=value
         )
 
-    def get_history(self, key=None, plugin_id=None):
+    def get_history(self, key=None, plugin_id: Optional[str] = None):
         """
         获取插件运行数据，只返回一条，自动识别转换为对象
         """
@@ -164,7 +167,7 @@ class _IPluginModule(metaclass=ABCMeta):
                 result.append(history.VALUE)
         return None if key else result
 
-    def update_history(self, key, value, plugin_id=None):
+    def update_history(self, key, value, plugin_id: Optional[str] = None):
         """
         更新插件运行数据
         """
@@ -178,7 +181,9 @@ class _IPluginModule(metaclass=ABCMeta):
             plugin_id=plugin_id, key=key, value=value
         )
 
-    def delete_history(self, key=None, plugin_id=None, is_delete_all=False):
+    def delete_history(
+        self, key=None, plugin_id: Optional[str] = None, is_delete_all=False
+    ):
         """
         删除插件运行数据
         :param key: 删除单条数据时，需要指定key
