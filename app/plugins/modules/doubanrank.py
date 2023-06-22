@@ -686,7 +686,7 @@ ajax_post(
                                     ):
                                         self.info(
                                             f"已处理过：{douban_title}"
-                                            "（豆瓣id：{douban_id}）"
+                                            f"（豆瓣id：{douban_id}）"
                                         )
                                         continue
 
@@ -710,7 +710,7 @@ ajax_post(
                                 if not media_info:
                                     self.warn(
                                         f"未查询到媒体信息：{douban_title}"
-                                        "（豆瓣id：{douban_id}）"
+                                        f"（豆瓣id：{douban_id}）"
                                     )
                                     continue
 
