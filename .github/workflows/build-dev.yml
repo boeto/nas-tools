@@ -6,6 +6,7 @@ on:
       - dev
     paths:
       - version.py
+      - .cicd
       - .github/workflows/build-dev.yml
       - package_list.txt
       - requirements.txt
