@@ -783,10 +783,6 @@ ajax_post(
                                     continue
 
                                 media_type = media_info.type
-                                self.debug(
-                                    "media_info__dict__:"
-                                    f" {media_info.__dict__}"
-                                )
 
                                 # 如果是剧集且开启全季订阅，则轮流下载每一季
                                 if (
@@ -904,7 +900,7 @@ ajax_post(
         download_setting: str,
         customize_save_path: Optional[str] = None,
     ):
-        self.debug(f"download_setting: {download_setting}")
+        self.debug(f"douban_title: {douban_title}")
         self.debug(f"customize_save_path: {customize_save_path}")
 
         # 检查媒体服务器是否存在
