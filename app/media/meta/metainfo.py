@@ -1,4 +1,5 @@
 import os.path
+from typing import Any
 import regex as re
 
 import log
@@ -35,6 +36,8 @@ def MetaInfo(title, subtitle=None, mtype=None):
     else:
         fileflag = False
 
+    meta_info: Any = None
+
     if mtype == MediaType.ANIME or is_anime(rev_title):
         meta_info = MetaAnime(rev_title, subtitle, fileflag)
     else:
@@ -42,8 +45,10 @@ def MetaInfo(title, subtitle=None, mtype=None):
 
     # 设置原始名称
     meta_info.org_string = org_title
+
     # 设置识别词处理后名称
     meta_info.rev_string = rev_title
+
     # 设置应用的识别词
     meta_info.ignored_words = used_info.get("ignored")
     meta_info.replaced_words = used_info.get("replaced")
@@ -60,13 +65,16 @@ def is_anime(name):
     """
     if not name:
         return False
-    if re.search(r'【[+0-9XVPI-]+】\s*【', name, re.IGNORECASE):
+    if re.search(r"【[+0-9XVPI-]+】\s*【", name, re.IGNORECASE):
         return True
-    if re.search(r'\s+-\s+[\dv]{1,4}\s+', name, re.IGNORECASE):
+    if re.search(r"\s+-\s+[\dv]{1,4}\s+", name, re.IGNORECASE):
         return True
-    if re.search(r"S\d{2}\s*-\s*S\d{2}|S\d{2}|\s+S\d{1,2}|EP?\d{2,4}\s*-\s*EP?\d{2,4}|EP?\d{2,4}|\s+EP?\d{1,4}", name,
-                 re.IGNORECASE):
+    if re.search(
+        r"S\d{2}\s*-\s*S\d{2}|S\d{2}|\s+S\d{1,2}|EP?\d{2,4}\s*-\s*EP?\d{2,4}|EP?\d{2,4}|\s+EP?\d{1,4}",  # noqa E501
+        name,
+        re.IGNORECASE,
+    ):
         return False
-    if re.search(r'\[[+0-9XVPI-]+]\s*\[', name, re.IGNORECASE):
+    if re.search(r"\[[+0-9XVPI-]+]\s*\[", name, re.IGNORECASE):
         return True
     return False
