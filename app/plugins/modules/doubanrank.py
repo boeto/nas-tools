@@ -232,7 +232,7 @@ class DoubanRank(_IPluginModule):
                         "placeholder": (
                             "https://rsshub.app/douban/"
                             "movie/classification/:sort?/:score?/"
-                            ":tags?;/customize_save_path"
+                            ":tags?;/movie_path#/tv_path#/anime_path"
                         ),
                         "rows": 3,
                     },
@@ -329,6 +329,7 @@ class DoubanRank(_IPluginModule):
                     "访问https://docs.rsshub.app/social-media.html"
                     "#dou-ban 查询可用地址。订阅地址后再接分号 `;` "
                     "可再自定义该订阅地址的保存路径。"
+                    " 分号后可用#按类型分割路径/电影#/电视剧#/动漫"
                 ),
                 "content": rss_download_content,
             },
@@ -547,13 +548,13 @@ ajax_post(
         """
         删除豆瓣的订阅历史和缓存记录
         """
+
         self.debug(
-            (
-                f"删除的影片信息: tmdb_id={tmdb_id}, title={title},"
-                f" year={year}, douban_id={douban_id},"
-                f" douban_title={douban_title}"
-            ),
+            f"删除的影片信息: tmdb_id={tmdb_id}, title={title},"
+            f" year={year}, douban_id={douban_id},"
+            f" douban_title={douban_title}",
         )
+
         self.info(f"删除 {title} ({year}) 的豆瓣订阅历史...")
         self.delete_history(key=tmdb_id)
 
@@ -642,9 +643,14 @@ ajax_post(
                         try:
                             self.info(f"获取RSS：{addr} ...")
 
-                            customize_save_path = None
+                            # customize_save_path = None
+                            customize_save_path_movie = None
+                            customize_save_path_tv = None
+                            customize_save_path_anime = None
+
                             # 提取分号分割的链接和保存地址
                             if ";" in addr:
+                                self.debug("分割订阅地址")
                                 split_str = addr.split(";")
                                 str_list: List[str] = []
                                 for item in split_str:
@@ -652,10 +658,56 @@ ajax_post(
                                         str_list.append(item.strip())
                                 addr = str_list[0]
                                 customize_save_path = str_list[1]
-                                self.info(
-                                    f"订阅链接 {addr} 的自定义保存路径为:"
+
+                                self.debug(f"addr: {addr}")
+                                self.debug(
+                                    "customize_save_path:"
                                     f" {customize_save_path}"
                                 )
+
+                                if "#" in customize_save_path:
+                                    customize_save_path_list = (
+                                        customize_save_path.split("#")
+                                    )
+
+                                    self.debug(
+                                        "customize_save_path_list:"
+                                        f" {customize_save_path_list}"
+                                    )
+
+                                    customize_save_path_movie = (
+                                        customize_save_path_list[0]
+                                    )
+                                    customize_save_path_tv = (
+                                        customize_save_path_list[1]
+                                    )
+                                    customize_save_path_anime = (
+                                        customize_save_path_list[2]
+                                        or customize_save_path_tv
+                                    )
+
+                                    self.info(
+                                        f"订阅链接 {addr} 的自定义保存路径为:"
+                                        f" 电影:{customize_save_path_movie},"
+                                        f" 电视剧: {customize_save_path_tv},"
+                                        f" 动漫: {customize_save_path_anime}"
+                                    )
+
+                                else:
+                                    customize_save_path_movie = (
+                                        customize_save_path
+                                    )
+                                    customize_save_path_tv = (
+                                        customize_save_path
+                                    )
+                                    customize_save_path_anime = (
+                                        customize_save_path
+                                    )
+
+                                    self.info(
+                                        f"订阅链接 {addr} 的自定义保存路径为:"
+                                        f" {customize_save_path}"
+                                    )
 
                             rss_infos = self.get_rss_info(addr)
                             if not rss_infos:
@@ -714,6 +766,10 @@ ajax_post(
                                     )
                                     continue
 
+                                self.debug(
+                                    f"media_info.type: {media_info.type}"
+                                )
+
                                 if (
                                     self._vote
                                     and media_info.vote_average
@@ -726,12 +782,20 @@ ajax_post(
                                     )
                                     continue
 
+                                media_type = media_info.type
+                                self.debug(
+                                    "media_info__dict__:"
+                                    f" {media_info.__dict__}"
+                                )
+
                                 # 如果是剧集且开启全季订阅，则轮流下载每一季
                                 if (
-                                    media_info.tmdb_info
-                                    and media_info.tmdb_info["media_type"]
-                                    == MediaType.TV
-                                    and self._is_seasons_all
+                                    self._is_seasons_all
+                                    and media_info.tmdb_info
+                                    and (
+                                        media_type == MediaType.TV
+                                        or media_type == MediaType.ANIME
+                                    )
                                 ):
                                     seasons = Media().get_tmdb_tv_seasons(
                                         media_info.tmdb_info
@@ -745,22 +809,39 @@ ajax_post(
                                         media_info.begin_season = season.get(
                                             "season_number"
                                         )
+
+                                        if media_type == MediaType.ANIME:
+                                            s_path = customize_save_path_anime
+                                        else:
+                                            s_path = customize_save_path_tv
                                         self.add_rss(
                                             media_info,
                                             douban_title,
                                             download_setting,
-                                            customize_save_path,
+                                            s_path,
                                         )
                                 else:
                                     self.info(
                                         "开始尝试添加订阅："
                                         f" {media_info.get_title_string()}"
+                                        f" 媒体类型: {media_type}"
                                     )
+
+                                    if media_type == MediaType.ANIME:
+                                        s_path = customize_save_path_anime
+                                    elif media_type == MediaType.TV:
+                                        s_path = customize_save_path_tv
+                                    elif media_type == MediaType.MOVIE:
+                                        s_path = customize_save_path_movie
+                                    else:
+                                        self.info("未识别到影片类型,跳过处理")
+                                        return
+
                                     self.add_rss(
                                         media_info,
                                         douban_title,
                                         download_setting,
-                                        customize_save_path,
+                                        s_path,
                                     )
 
                                 # RSS_TORRENTS 添加处理历史
@@ -804,9 +885,9 @@ ajax_post(
                         self.warn(f"解析的豆瓣ID格式不正确：{doubanid}")
                         continue
                     # 返回对象
-                    ret_array.append(
-                        {"title": title, "link": link, "doubanid": doubanid}
-                    )
+                    ret_array.append({
+                        "title": title, "link": link, "doubanid": doubanid
+                    })
                 except Exception as e1:
                     self.error("解析RSS条目失败：" + str(e1))
                     continue
@@ -823,6 +904,9 @@ ajax_post(
         download_setting: str,
         customize_save_path: Optional[str] = None,
     ):
+        self.debug(f"download_setting: {download_setting}")
+        self.debug(f"customize_save_path: {customize_save_path}")
+
         # 检查媒体服务器是否存在
         if self.mediaserver:
             item_id = self.mediaserver.check_item_exists(

@@ -60,7 +60,14 @@ nohup python3 run.py &
 ```bash
 git clone --single-branch -b dev https://github.com/boeto/nas-tools --recurse-submodule
 cd nas-tools
-poetry install
+
+# 切换python版本到3.10
+# poetry env use "${HOME}/.pyenv/versions/3.10.13/bin/python3"
+
+# 安装依赖
+poetry install --no-root
+
+# 初始化 pre-commit
 poetry run pre-commit install --install-hooks
 poetry run pre-commit autoupdate
 ```
@@ -68,10 +75,13 @@ poetry run pre-commit autoupdate
 * 运行程序
 
 ```bash
+# 配置运行env
 tee .env <<EOF
 NASTOOL_CONFIG=config-dev/config.yaml
 FLASK_DEBUG=1
 EOF
+
+#启动app
 poetry run python3 run.py
 ```
 

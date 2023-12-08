@@ -263,3 +263,5 @@ nohup.out
 config-prod*
 config-test*
 config-dev*
+
+/bak2
